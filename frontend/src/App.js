@@ -32,7 +32,7 @@ if (activeTab === 'top') {
 
 
 return (
-<div className="app p-4">
+<div className="app">
   <Header
     categories={categories}
     selectedCategory={selectedCategory}

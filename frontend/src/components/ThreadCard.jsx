@@ -10,7 +10,8 @@ export default function ThreadCard({ thread }) {
         <article className="w-full flex items-start gap-4 p-3 bg-white border border-slate-200 rounded-md">
             <div className="flex-1">
                 <div className="flex items-center gap-3 text-sm text-slate-500 mb-1">
-                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-semibold">c/{thread.categorySlug}</span>
+                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-semibold">
+                        <a href={`/t/${thread.categorySlug}`}>t/{thread.categorySlug}</a></span>
                     <span>by {thread.author}</span>
                     <span>•</span>
                     <time dateTime={dt.toISOString()}>{rel}</time>
