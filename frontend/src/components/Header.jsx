@@ -16,14 +16,14 @@ export default function Header({ categories = [], selectedCategory, onCategoryCh
           gap-3
         ">
           {/* LEFT (desktop) */}
-          <div className="hidden md:flex items-center gap-6 justify-self-start">
-            <a href="#home" className="flex items-center gap-2 font-bold text-slate-800" aria-label="Home">
+          <div className="hidden md:flex items-center gap-x-6 justify-self-start">
+            <a href="#home" className="flex items-center gap-2 font-bold text-slate-800 whitespace-nowrap" aria-label="Home">
               <img src={logo} alt="Site logo" className="w-7 h-7" />
               <span>Threadly</span>
             </a>
 
-            <nav className="flex items-center gap-3">
-              <a className="text-slate-600 hover:text-slate-900" href="#explore">Explore</a>
+            <nav className="flex items-center gap-3 ml-4">
+              <a className="text-slate-600 hover:text-slate-900 px-2" href="#explore">Explore</a>
               <label htmlFor="category-select" className="sr-only">Select category</label>
               <select
                 id="category-select"
