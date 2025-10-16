@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import SearchBar from './SearchBar';
-import logo from '../images/spool-of-thread.png';
+import logo from "../images/spool-of-thread.png";
 
 export default function Header({ categories = [], selectedCategory, onCategoryChange }) {
   const [open, setOpen] = useState(false);

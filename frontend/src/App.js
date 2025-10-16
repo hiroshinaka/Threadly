@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Signup from './components/Signup';
+import Login from './components/Login';
 import './App.css';
 import Header from './components/Header';
 import ThreadList from './components/ThreadList';
@@ -32,52 +35,56 @@ if (activeTab === 'top') {
 
 
 return (
-<div className="app">
-  <Header
-    categories={categories}
-    selectedCategory={selectedCategory}
-    onCategoryChange={setSelectedCategory}
-  />
-  <br />
-  <main>
-    <section className="section">
-      <div className="container">
-        {/* Keep heading for discoverability but move UI to header */}
-      </div>
-    </section>
-
-    <section className="section alt">
-      <div className="container p-6">
-        <div className="section-header">
-          <div className="flex gap-3">
-            {['new','top','hot'].map(key => {
-              const isActive = activeTab === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setActiveTab(key)}
-                  aria-pressed={isActive}
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${isActive ? 'bg-slate-900 text-white border border-slate-800' : 'bg-transparent text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
-                >{key.toUpperCase()}</button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Render thread list full-width so cards can stretch to the viewport edge */}
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <ThreadList
-          threads={threads
-            .filter(t => !selectedCategory || t.categorySlug === selectedCategory)
-            .slice(0, 8)}
-        />
-      </div>
-    </section>
-  </main>
-  <br />
-  <Footer />
-</div>
+  <Router>
+    <div className="app p-4">
+      <Header
+        categories={categories}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+      />
+      <br />
+      <Routes>
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={
+          <main>
+            <section className="section">
+              <div className="container">
+              </div>
+            </section>
+            <section className="section alt bg-gray-50 py-6">
+              <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+                <div className="section-header">
+                  <div className="flex gap-3">
+                    {['new','top','hot'].map(key => {
+                      const isActive = activeTab === key;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setActiveTab(key)}
+                          aria-pressed={isActive}
+                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors duration-200 ease-in-out ${isActive ? 'bg-slate-900 text-white border border-slate-800' : 'bg-transparent text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-900'}`}
+                        >{key.toUpperCase()}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="w-full px-4 sm:px-6 lg:px-8">
+                <ThreadList
+                  threads={threads
+                    .filter(t => !selectedCategory || t.categorySlug === selectedCategory)
+                    .slice(0, 8)}
+                />
+              </div>
+            </section>
+          </main>
+        } />
+      </Routes>
+      <br />
+      <Footer />
+    </div>
+  </Router>
 );
 }
 
