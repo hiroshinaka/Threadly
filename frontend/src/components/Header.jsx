@@ -21,28 +21,28 @@ const Header = ({ categories = [], selectedCategory, onCategoryChange }) => {
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
 
   return (
-    <header className="bg-white">
-      <div className="mx-auto max-w-full px-6">
-        <div className="flex h-16 items-center justify-between">
+    <header className="bg-white w-full">
+      <div className="mx-auto w-full px-2 sm:px-4 md:px-6">
+        <div className="flex flex-row items-center justify-between h-16 gap-2 sm:gap-4 md:gap-8 w-full">
           {/* Left side: logo and category select */}
-          <div className="flex items-center gap-6 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0 flex-shrink-0">
             <button
               className="flex items-center gap-2 text-teal-600 bg-transparent border-none cursor-pointer"
               aria-label="Home"
               onClick={() => navigate("/")}
             >
               <img src={logo} alt="Site logo" className="w-7 h-7" />
-              <span className="font-bold text-slate-800">Threadly</span>
+              <span className="font-bold text-slate-800 text-base md:flex hidden">Threadly</span>
             </button>
             {/* Category select dropdown, only visible on allowed routes */}
             {showCategorySelect && (
-              <div className="">
+              <div className="flex items-center">
                 <label htmlFor="category-select" className="sr-only">
                   Select category
                 </label>
                 <select
                   id="category-select"
-                  className="bg-transparent text-slate-800 border-none border-slate-200 rounded-md px-3 py-1 text-sm "
+                  className="bg-transparent text-slate-800 border-none border-slate-200 rounded-md px-3 py-2 text-base"
                   value={selectedCategory || ""}
                   onChange={(e) =>
                     onCategoryChange && onCategoryChange(e.target.value || null)
@@ -59,13 +59,13 @@ const Header = ({ categories = [], selectedCategory, onCategoryChange }) => {
             )}
           </div>
           {/* Center: search bar */}
-          <div className="flex-1 flex justify-center min-w-lg">
-            <form className="w-full max-w-xl">
+          <div className="flex-1 flex justify-center min-w-0 px-2 sm:px-4 md:px-6">
+            <form className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl">
               <div className="relative">
                 <input
                   type="text"
                   id="Search"
-                  className="mt-0.5 w-full rounded border border-gray-300 shadow-sm sm:text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="mt-0.5 w-full min-h-[44px] rounded border border-gray-300 shadow-sm text-base px-4 py-2 focus:outline-none focus:ring-2 focus:ring-slate-400 transition-all duration-200"
                   placeholder="Search..."
                 />
                 <span className="absolute inset-y-0 right-2 grid w-8 place-content-center">
@@ -94,9 +94,9 @@ const Header = ({ categories = [], selectedCategory, onCategoryChange }) => {
             </form>
           </div>
           {/* Right side: Explore, auth buttons, profile dropdown */}
-          <div className="flex items-center gap-6 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0 flex-shrink-0">
             <button
-              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-sm"
+              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
               onClick={() => navigate("/#explore")}
             >
               Explore
@@ -105,18 +105,18 @@ const Header = ({ categories = [], selectedCategory, onCategoryChange }) => {
             <div className="flex items-center gap-3 ml-4">
               {!isLoggedIn ? (
                 <>
-                  <button
-                    className="px-5 py-2.5 font-medium rounded-md border border-slate-300 text-sm text-slate-700 transition-colors duration-200 ease-in-out hover:bg-gray-100 hover:text-gray-900"
-                    onClick={() => navigate("/login")}
-                  >
-                    Log in
-                  </button>
-                  <button
-                    className="px-5 py-2.5 font-medium rounded-md bg-gray-900 text-white text-sm transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-white"
-                    onClick={() => navigate("/signup")}
-                  >
-                    Sign up
-                  </button>
+                    <button
+                        className="px-5 py-2.5 font-medium rounded-md border border-slate-300 text-base text-slate-700 transition-colors duration-200 ease-in-out hover:bg-gray-100 hover:text-gray-900"
+                        onClick={() => navigate("/login")}
+                    >
+                        Log in
+                    </button>
+                    <button
+                        className="px-5 py-2.5 font-medium rounded-md bg-gray-900 text-white text-base transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-white"
+                        onClick={() => navigate("/signup")}
+                    >
+                        Sign up
+                    </button>
                 </>
               ) : (
                 <div className="relative hidden md:block">
