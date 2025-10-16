@@ -36,13 +36,12 @@ if (activeTab === 'top') {
 
 return (
   <Router>
-    <div className="app p-4">
+    <div className="app">
       <Header
         categories={categories}
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
       />
-      <br />
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
@@ -81,7 +80,6 @@ return (
           </main>
         } />
       </Routes>
-      <br />
       <Footer />
     </div>
   </Router>
