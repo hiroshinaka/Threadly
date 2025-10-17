@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
+import CategoryModal from './CategoryModal';
 import logo from "../images/spool-of-thread.png";
 
 export default function Header({
@@ -10,11 +11,37 @@ export default function Header({
   isLoggedIn = false,
 }) {
   const [open, setOpen] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate = useNavigate();
+  const [localCategories, setLocalCategories] = useState(categories || []);
+
+  const defaultCreateCategory = async (payload) => {
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Create category failed: ${res.status} ${text}`);
+      }
+      const body = await res.json();
+      // if backend returns created category, push it into localCategories
+      if (body && body.category) {
+        setLocalCategories((c) => [body.category, ...c]);
+      }
+      return body;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-2 text-base font-medium">
+    <>
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-2 text-base font-medium">
       <div className="w-full px-3 sm:px-4">
         {/* Layout grid */}
         <div
@@ -49,13 +76,25 @@ export default function Header({
                 }
               >
                 <option value="">All Categories</option>
-                {categories.map((cat) => (
-                  <option key={cat.slug} value={cat.slug}>
+                {localCategories.map((cat) => (
+                  <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
                     {cat.name}
                   </option>
                 ))}
               </select>
             </nav>
+            <button
+              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
+              onClick={() => navigate("/#")}
+            >
+              + New Thread
+            </button>
+            <button
+              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
+              onClick={() => setShowCategoryModal(true)}
+            >
+              + New Category
+            </button>
           </div>
 
           {/* CENTER (search bar) */}
@@ -116,20 +155,28 @@ export default function Header({
                       role="menu"
                     >
                       <div className="p-2">
-                        <a
-                          href="#"
-                          className="block rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            navigate('/profile');
+                          }}
+                          className="block text-left w-full rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
                           role="menuitem"
                         >
                           Profile
-                        </a>
-                        <a
-                          href="#"
-                          className="block rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            navigate('/subreddits');
+                          }}
+                          className="block text-left w-full rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
                           role="menuitem"
                         >
-                          Subreddit List
-                        </a>
+                          Categories 
+                        </button>
                         <form method="POST" action="#">
                           <button
                             type="submit"
@@ -242,6 +289,26 @@ export default function Header({
               >
                 Explore
               </a>
+              <button
+                type="button"
+                className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
+                onClick={() => {
+                  setOpen(false);
+                  navigate('/#create-thread');
+                }}
+              >
+                Create a Thread
+              </button>
+              <button
+                type="button"
+                className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
+                onClick={() => {
+                  setOpen(false);
+                  setShowCategoryModal(true);
+                }}
+              >
+                Create a Category
+              </button>
 
               <div className="space-y-1">
                 <label
@@ -261,8 +328,8 @@ export default function Header({
                   }}
                 >
                   <option value="">All Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat.slug} value={cat.slug}>
+                  {localCategories.map((cat) => (
+                    <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
                       {cat.name}
                     </option>
                   ))}
@@ -295,5 +362,12 @@ export default function Header({
         </div>
       )}
     </header>
+      <CategoryModal
+        isOpen={showCategoryModal}
+        onClose={() => setShowCategoryModal(false)}
+        categories={categories}
+        onCreate={defaultCreateCategory}
+      />
+    </>
   );
 }
