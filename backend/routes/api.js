@@ -32,4 +32,8 @@ router.post('/login', (req, res) => {
 	res.json({ ok: true, message: 'Login successful!' });
 });
 
+// Mount threads router
+const threadsRouter = require('./threads');
+router.use('/threads', threadsRouter);
+
 module.exports = router;
