@@ -11,13 +11,20 @@ const app = express();
 
 app.use(express.json());
 
-app.use(session({
+const sessionOptions = {
     secret: process.env.NODE_SESSION_SECRET || 'defaultsecret',
-    store: mongoStore,
     resave: false,
     saveUninitialized: true,
     cookie: { secure: false } // TODO: True if using HTTPS
-}));
+};
+
+if (mongoStore) {
+    sessionOptions.store = mongoStore;
+} else {
+    console.warn('Mongo session store not available — using default MemoryStore. Sessions will not be persisted across restarts.');
+}
+
+app.use(session(sessionOptions));
 
 const publicPath = path.join(__dirname, '../frontend/build');
 
