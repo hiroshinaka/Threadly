@@ -24,12 +24,22 @@ router.post('/signup', (req, res) => {
 });
 
 router.post('/login', (req, res) => {
-	const { username, password } = req.body;
-	const user = users.find(u => u.username === username && u.password === password);
-	if (!user) {
-		return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
-	}
-	res.json({ ok: true, message: 'Login successful!' });
+    const { username, password } = req.body;
+    const user = users.find(u => u.username === username && u.password === password);
+    if (!user) {
+        return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
+    }
+
+    req.session.user = { username: user.username };
+    res.json({ ok: true, message: 'Login successful!', user: req.session.user });
 });
+
+router.post('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) return res.status(500).json({ ok: false, message: 'Logout failed' });
+        res.json({ ok: true, message: 'Logged out successfully' });
+    });
+});
+
 
 module.exports = router;
