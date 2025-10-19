@@ -1,8 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../database/connections/databaseConnection');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1024*1024 } });
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
+const { createThread } = require('../database/dbQueries/threadQuery');
 const users = [];
+
+cloudinary.config({
+	cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+	api_key: process.env.CLOUDINARY_API_KEY,
+	api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 router.get('/ping', (req, res) => {
 	res.json({ ok: true, message: 'pong', now: new Date().toISOString() });
@@ -63,8 +73,48 @@ router.post('/categories', async (req, res) => {
 
 });
 //TODO: Implement thread creation
-router.post('/threads', async (req, res) => {
-    const { title, body, author_id, category_id } = req.body;
+router.post('/threads', upload.single('image'), async (req, res) => {
+	try {
+		const { title, text, category_id } = req.body;
+		//Check user is logged in 
+		let author_id = null;
+		if (req.session && req.session.user && req.session.user.id) {
+			author_id = req.session.user.id;
+		} else {
+			return res.status(401).json({ ok: false, message: 'Unauthorized: Please log in to create a thread.' });
+		}
+		//Check for empty fields
+		if (!title || !category_id) {
+			return res.status(400).json({ ok: false, message: 'title and category_id are required.' });
+		}
+
+		// fetch category
+		const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ? OR slug = ?', [category_id, category_id]);
+		if (!catRows.length) return res.status(400).json({ ok: false, message: 'Invalid category' });
+		const category = catRows[0];
+
+		let bodyToSave = null;
+
+		if (req.file) {
+			if (!category.photo_allow) {
+				return res.status(400).json({ ok: false, message: 'This category does not allow image posts' });
+			}
+			// upload buffer to cloudinary
+			const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+			const uploadResult = await cloudinary.uploader.upload(dataUri, { folder: 'threadly' });
+			bodyToSave = JSON.stringify({ type: 'image', url: uploadResult.secure_url, width: uploadResult.width, height: uploadResult.height });
+		} else {
+			if (!category.text_allow) return res.status(400).json({ ok: false, message: 'This category does not allow text posts' });
+			if (!text || text.trim().length === 0) return res.status(400).json({ ok: false, message: 'Text body is required for text posts' });
+			bodyToSave = text.trim();
+		}
+		//Insert thread into database
+		const threadId = await createThread(pool, title.trim(), bodyToSave, author_id, category.categories_id);
+		res.status(201).json({ ok: true, thread_id: threadId });
+	} catch (err) {
+		console.error('Error creating thread', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
 });
 
 
