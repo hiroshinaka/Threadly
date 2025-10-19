@@ -6,7 +6,11 @@ const cloudinary = require('cloudinary').v2;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1024*1024 } });
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
 const { createThread } = require('../database/dbQueries/threadQuery');
-const users = [];
+const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
+
+const bcrypt = require('bcryptjs');
+const joi = require('joi');
+const saltRounds = 10;
 
 cloudinary.config({
 	cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -22,30 +26,98 @@ router.post('/echo', (req, res) => {
 	res.json({ received: req.body });
 });
 
-router.post('/signup', (req, res) => {
-	const { username, password } = req.body;
-	if (!username || !password) {
-		return res.status(400).json({ ok: false, message: 'Username and password required.' });
+router.post('/signup', async (req, res) => {
+	try {
+		const { username, password } = req.body;
+
+		if (!username || !password) {
+			return res.status(400).json({ ok: false, message: 'Username and password required.' });
+		}
+
+		const schema = joi.object({
+			username: joi.string().alphanum().min(3).max(20).required(),
+			password: joi
+				.string()
+				.min(10)
+				.max(30)
+				.pattern(
+					new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=[\\]{};:"\\\\|,.<>/?]).+$')
+				)
+				.required()
+				.messages({
+					'string.pattern.base':
+						'Password must include uppercase, lowercase, number, and special character.',
+				}),
+		});
+
+		const { error } = schema.validate({ username, password });
+		if (error) {
+			return res.status(400).json({ ok: false, message: error.details[0].message });
+		}
+		const existingUser = await getUserByUsername(pool, username);
+		if (existingUser) {
+			return res.status(409).json({ ok: false, message: 'Username already taken.' });
+		}
+
+        const default_role_id = 2;
+		const hashedPassword = await bcrypt.hash(password, saltRounds);
+		await createUser(pool, username, hashedPassword, default_role_id);
+
+		res.json({ ok: true, message: 'Signup successful!' });
+	} catch (err) {
+		console.error(err);
+		res.status(500).json({ ok: false, message: 'Internal server error.' });
 	}
-	if (users.find(u => u.username === username)) {
-		return res.status(409).json({ ok: false, message: 'Username already exists.' });
-	}
-	users.push({ username, password });
-	res.json({ ok: true, message: 'Signup successful!' });
 });
 
-router.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    const user = users.find(u => u.username === username && u.password === password);
-    if (!user) {
-        return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
+router.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        if (!username || !password) {
+            return res.status(400).json({ ok: false, message: 'Username and password required.' });
+        }
+
+        const user = await getUserWithPassword(pool, username);
+        
+        if (!user) {
+            return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+        
+        if (!isPasswordValid) {
+            return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
+        }
+
+        // session data here 
+        req.session.user = { 
+            id: user.id,
+            username: user.username,
+            role_id: user.role_id
+        };
+
+        res.json({ 
+            ok: true, 
+            message: 'Login successful!', 
+            user: req.session.user 
+        });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ ok: false, message: 'Internal server error.' });
     }
-
-    req.session.user = { username: user.username };
-    res.json({ ok: true, message: 'Login successful!', user: req.session.user });
 });
 
-
+router.post('/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('Logout error:', err);
+            return res.status(500).json({ ok: false, message: 'Failed to logout.' });
+        }
+        res.clearCookie('connect.sid'); // Clear the session cookie
+        res.json({ ok: true, message: 'Logout successful!' });
+    });
+});
 
 router.post('/categories', async (req, res) => {
 	const { name, description , text_allow , photo_allow } = req.body;
