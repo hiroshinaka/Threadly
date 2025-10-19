@@ -15,9 +15,8 @@ const Login = () => {
         const res = await fetch('/api/me', { credentials: 'include' });
         const data = await res.json();
         if (data.ok) {
-          setUser(data.user);
-          setMessage(`Welcome back, ${data.user.username}!`);
-          navigate('/dashboard');
+          // setUser(data.user); idk if needed
+          navigate('/');
         }
       } catch (err) {
         console.error(err);
