@@ -15,7 +15,10 @@ const sessionOptions = {
     secret: process.env.NODE_SESSION_SECRET || 'defaultsecret',
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false } // TODO: True if using HTTPS
+    cookie: { 
+        secure: false,
+        maxAge: 24 * 60 * 60 * 1000
+     } // TODO: True if using HTTPS
 };
 
 if (mongoStore) {
