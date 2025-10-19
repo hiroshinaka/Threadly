@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
 import CategoryModal from './CategoryModal';
+import ThreadModal from './ThreadModal';
 import logo from "../images/spool-of-thread.png";
 
 export default function Header({
@@ -12,6 +13,7 @@ export default function Header({
 }) {
   const [open, setOpen] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showThreadModal, setShowThreadModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate = useNavigate();
   const [localCategories, setLocalCategories] = useState(categories || []);
@@ -38,6 +40,27 @@ export default function Header({
       throw err;
     }
   };
+
+  const defaultCreateThread = async (payload) => {
+    try{
+      let res;
+      if (payload instanceof FormData) {
+        res = await fetch('/api/threads', { method: 'POST', body: payload });
+      } else {
+        res = await fetch('/api/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Create thread failed: ${res.status} ${text}`);
+      }
+      const body = await res.json();
+      return body;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
 
   return (
     <>
@@ -85,7 +108,7 @@ export default function Header({
             </nav>
             <button
               className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
-              onClick={() => navigate("/#")}
+              onClick={() => setShowThreadModal(true)}
             >
               + New Thread
             </button>
@@ -292,10 +315,8 @@ export default function Header({
               <button
                 type="button"
                 className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
-                onClick={() => {
-                  setOpen(false);
-                  navigate('/#create-thread');
-                }}
+                onClick={() => { setShowThreadModal(true); setOpen(false); }}
+   
               >
                 Create a Thread
               </button>
@@ -303,8 +324,8 @@ export default function Header({
                 type="button"
                 className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
                 onClick={() => {
-                  setOpen(false);
                   setShowCategoryModal(true);
+                  setOpen(false);
                 }}
               >
                 Create a Category
@@ -365,8 +386,15 @@ export default function Header({
       <CategoryModal
         isOpen={showCategoryModal}
         onClose={() => setShowCategoryModal(false)}
-        categories={categories}
+        categories={localCategories}
         onCreate={defaultCreateCategory}
+      />
+      <ThreadModal
+        isOpen={showThreadModal}
+        onClose={() => setShowThreadModal(false)}
+        onCreate={defaultCreateThread}
+        categories={localCategories}
+        selectedCategory={selectedCategory}
       />
     </>
   );
