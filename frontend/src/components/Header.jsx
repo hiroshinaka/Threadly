@@ -78,7 +78,7 @@ export default function Header({
           {/* LEFT (desktop) */}
           <div className="hidden md:flex items-center gap-x-6 justify-self-start">
             <a
-              href="#home"
+              href="/"
               className="flex items-center gap-2 font-semibold text-slate-800 whitespace-nowrap"
               aria-label="Home"
             >
