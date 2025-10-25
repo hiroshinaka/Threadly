@@ -46,7 +46,6 @@ export default function ThreadCard({ thread }) {
     const delta = voted === -1 ? 2 : 1;
     setKarma(k => k + delta);
     setVoted(1);
-    // optimistic: attempt backend POST and reconcile returned karma
     fetch(`/api/threads/${thread.thread_id}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: 1 }) })
       .then(r => r.json())
       .then(b => { if (b && typeof b.karma === 'number') setKarma(b.karma); })

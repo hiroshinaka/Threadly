@@ -26,6 +26,44 @@ function renderBody(body) {
   }
 }
 
+// Stable recursive comment renderer (defined outside the main component so its identity doesn't change between renders)
+function CommentNode({ comment, replyingTo, setReplyingTo, replyText, setReplyText, submitReply, voteComment }) {
+  return (
+    <li key={comment.comment_id} className="border rounded-md p-3 bg-white">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-slate-500 mb-1">{comment.username || comment.author_id} • <time dateTime={comment.created_at}>{new Date(comment.created_at).toLocaleString()}</time></div>
+        <div className="flex items-center gap-2 text-sm">
+          <button onClick={() => voteComment(comment.comment_id, 1)} className="text-slate-500 hover:text-emerald-600">▲</button>
+          <span className="text-slate-700 font-semibold">{comment.karma || 0}</span>
+          <button onClick={() => voteComment(comment.comment_id, -1)} className="text-slate-500 hover:text-rose-600">▼</button>
+        </div>
+      </div>
+      <div className="mt-2">{comment.text}</div>
+      <div className="mt-2 text-sm">
+        <button onClick={() => setReplyingTo(replyingTo === comment.comment_id ? null : comment.comment_id)} className="text-slate-600 hover:text-slate-900">Reply</button>
+      </div>
+
+        {replyingTo === comment.comment_id && (
+        <div className="mt-2">
+          <textarea autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} className="w-full border rounded-md p-2" rows={3} placeholder={`Reply to ${comment.username || 'user'}...`} />
+          <div className="mt-2 flex gap-2">
+            <button onClick={() => submitReply(comment.comment_id)} className="px-3 py-1 bg-slate-900 text-white rounded-md">Post reply</button>
+            <button onClick={() => { setReplyingTo(null); setReplyText(''); }} className="px-3 py-1 border rounded-md">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {comment.replies && comment.replies.length > 0 && (
+        <ul className="mt-3 ml-4 space-y-2">
+          {comment.replies.map(r => (
+            <CommentNode key={r.comment_id} comment={r} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 export default function ThreadView() {
   // App routes use /t/:slug/:id — second param is named `id` (may be numeric id or slug)
   const { id: idParam } = useParams();
@@ -35,6 +73,8 @@ export default function ThreadView() {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [error, setError] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null); // comment_id being replied to
+  const [replyText, setReplyText] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -100,6 +140,44 @@ export default function ThreadView() {
     }
   };
 
+  
+
+  const submitReply = async (parentId) => {
+    if (!replyText.trim()) return;
+    try {
+      const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: replyText, parent_id: parentId }) });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || 'Failed to post reply');
+      }
+      // refresh
+      const refresh = await fetch(`/api/threads/${thread.thread_id}`);
+      const body = await refresh.json();
+      setComments(body.comments || []);
+      setReplyText('');
+      setReplyingTo(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const voteComment = async (commentId, value) => {
+    setComments(prev => prev.map(c => (c.comment_id === commentId ? { ...c, karma: (c.karma||0) + value } : c)));
+    try {
+      const res = await fetch(`/api/threads/comments/${commentId}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+      if (!res.ok) throw new Error(await res.text());
+      const body = await res.json();
+      // reconcile authoritative karma
+      setComments(prev => prev.map(c => (c.comment_id === commentId ? { ...c, karma: body.karma } : c)));
+    } catch (err) {
+      // on error, rollback optimistic (simple strategy: refetch comments)
+      const refresh = await fetch(`/api/threads/${thread.thread_id}`);
+      const b = await refresh.json();
+      setComments(b.comments || []);
+      setError(err.message || 'Vote failed');
+    }
+  };
+
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-rose-600">Error: {error}</div>;
   if (!thread) return <div className="p-6">Thread not found</div>;
@@ -123,20 +201,7 @@ export default function ThreadView() {
 
         <ul className="mt-4 space-y-3">
           {comments.map(c => (
-            <li key={c.comment_id} className="border rounded-md p-3 bg-white">
-              <div className="text-sm text-slate-500 mb-1">{c.username || c.author_id} • <time dateTime={c.created_at}>{new Date(c.created_at).toLocaleString()}</time></div>
-              <div>{c.text}</div>
-              {c.replies && c.replies.length > 0 && (
-                <ul className="mt-3 ml-4 space-y-2">
-                  {c.replies.map(r => (
-                    <li key={r.comment_id} className="border rounded-md p-2 bg-slate-50">
-                      <div className="text-sm text-slate-500 mb-1">{r.username || r.author_id} • <time dateTime={r.created_at}>{new Date(r.created_at).toLocaleString()}</time></div>
-                      <div>{r.text}</div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
+            <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} />
           ))}
         </ul>
       </section>

@@ -70,8 +70,13 @@ function App() {
       // sort by total karma (server persistently tracks karma)
       return scored.sort((a, b) => ( (b.karma || b.karma_score || 0) - (a.karma || a.karma_score || 0) ));
     }
-    // hot: sort by likes in the last hour (use `likesLastHour` if available, otherwise estimated value)
-    return scored.sort((a, b) => ( (b.likesLastHour || 0) - (a.likesLastHour || 0) ));
+    // controversial: sort by number of comments (threads with more discussion bubble up)
+    if (activeTab === 'controversial') {
+      return scored.sort((a, b) => ((b.commentCount || b.comment_count || 0) - (a.commentCount || a.comment_count || 0)));
+    }
+
+    // fallback: if unknown tab, return by created date
+    return scored.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [activeTab, threadsData]);
 
 
@@ -87,7 +92,7 @@ return (
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/t/:slug/:id" element={<ThreadView />} />
-  <Route path="/search" element={<SearchResults />} />
+        <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
           <main>
             <section className="section">
@@ -98,7 +103,7 @@ return (
               <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">
-                    {['new','top','hot'].map(key => {
+                    {['new','top','controversial'].map(key => {
                       const isActive = activeTab === key;
                       return (
                         <button

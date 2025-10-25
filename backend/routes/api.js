@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../database/connections/databaseConnection');
 const multer = require('multer');
+const threadsRouter = require('./threads');
 const cloudinary = require('cloudinary').v2;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1024*1024 } });
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
@@ -194,7 +195,7 @@ router.get('/search', async (req, res) => {
 	}
 });
 // Mount the threads router (provides GET /api/threads and thread detail endpoints)
-const threadsRouter = require('./threads');
+
 router.use('/threads', threadsRouter);
 
 router.post('/threads', upload.single('image'), async (req, res) => {
