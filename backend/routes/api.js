@@ -144,7 +144,59 @@ router.post('/categories', async (req, res) => {
 	}
 
 });
-//TODO: Implement thread creation
+// GET /categories - list categories
+router.get('/categories', async (req, res) => {
+	try {
+		const [rows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow, slug FROM categories ORDER BY name ASC');
+		res.json({ ok: true, categories: rows });
+	} catch (err) {
+		console.error('Error fetching categories', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+// GET /search?q=...&limit=20&offset=0
+router.get('/search', async (req, res) => {
+	try {
+		const q = (req.query.q || '').trim();
+		const limit = Math.min(100, parseInt(req.query.limit, 10) || 20);
+		const offset = parseInt(req.query.offset, 10) || 0;
+		if (!q) return res.status(400).json({ ok: false, message: 'q (query) is required' });
+
+		// Fulltext search works best for queries of length >= 3. For very short queries use LIKE fallback.
+		let rows = [];
+		if (q.length >= 3) {
+			const sql = `SELECT thread_id, title, slug, body, karma, created_at, category_id, MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+						 FROM thread
+						 WHERE MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE)
+						 ORDER BY score DESC
+						 LIMIT ? OFFSET ?`;
+			const [r] = await pool.query(sql, [q, q, limit, offset]);
+			rows = r;
+		}
+
+		// fallback to LIKE if fulltext returned nothing or query too short
+		if (rows.length === 0) {
+			const likeQ = `%${q}%`;
+			const sql2 = `SELECT thread_id, title, slug, body, karma, created_at, category_id
+						  FROM thread
+						  WHERE title LIKE ? OR body_text LIKE ?
+						  ORDER BY created_at DESC
+						  LIMIT ? OFFSET ?`;
+			const [r2] = await pool.query(sql2, [likeQ, likeQ, limit, offset]);
+			rows = r2;
+		}
+
+		res.json({ ok: true, query: q, count: rows.length, threads: rows });
+	} catch (err) {
+		console.error('Search error', err);
+		res.status(500).json({ ok: false, message: 'Search failed' });
+	}
+});
+// Mount the threads router (provides GET /api/threads and thread detail endpoints)
+const threadsRouter = require('./threads');
+router.use('/threads', threadsRouter);
+
 router.post('/threads', upload.single('image'), async (req, res) => {
 	try {
 		const { title, text, category_id } = req.body;
@@ -161,7 +213,7 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 		}
 
 		// fetch category
-		const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ? OR slug = ?', [category_id, category_id]);
+	const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ?', [category_id]);
 		if (!catRows.length) return res.status(400).json({ ok: false, message: 'Invalid category' });
 		const category = catRows[0];
 
@@ -173,16 +225,51 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 			}
 			// upload buffer to cloudinary
 			const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-			const uploadResult = await cloudinary.uploader.upload(dataUri, { folder: 'threadly' });
-			bodyToSave = JSON.stringify({ type: 'image', url: uploadResult.secure_url, width: uploadResult.width, height: uploadResult.height });
+			const uploadResult = await cloudinary.uploader.upload(dataUri, {
+				folder: 'threadly',
+				resource_type: 'image',
+				eager: [{ width: 400, height: 300, crop: 'fill' }],
+				eager_async: false,
+			});
+
+			// Cloudinary may or may not return eager results immediately depending on the account/config.
+			// Build a reliable thumbnail URL: prefer eager[0], otherwise build transformation URL from public_id.
+			let thumb = null;
+			if (uploadResult && uploadResult.eager && uploadResult.eager[0] && uploadResult.eager[0].secure_url) {
+				thumb = uploadResult.eager[0].secure_url;
+			} else if (uploadResult && uploadResult.public_id) {
+				try {
+					thumb = cloudinary.url(uploadResult.public_id, { width: 400, height: 300, crop: 'fill', secure: true });
+				} catch (e) {
+					thumb = null;
+				}
+			}
+
+			// allow an optional text/description alongside the image if the category permits
+			let imageBody = { type: 'image', url: uploadResult.secure_url, thumbnail_url: thumb, width: uploadResult.width, height: uploadResult.height, public_id: uploadResult.public_id };
+			if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) {
+				imageBody.text = text.trim();
+			}
+			bodyToSave = JSON.stringify(imageBody);
 		} else {
 			if (!category.text_allow) return res.status(400).json({ ok: false, message: 'This category does not allow text posts' });
 			if (!text || text.trim().length === 0) return res.status(400).json({ ok: false, message: 'Text body is required for text posts' });
 			bodyToSave = text.trim();
 		}
-		//Insert thread into database
-		const threadId = await createThread(pool, title.trim(), bodyToSave, author_id, category.categories_id);
-		res.status(201).json({ ok: true, thread_id: threadId });
+	// Determine searchable plain-text for body_text column (used by FULLTEXT search)
+	let bodyText = null;
+	try {
+		const parsed = JSON.parse(bodyToSave);
+		if (parsed && typeof parsed.text === 'string' && parsed.text.trim().length > 0) bodyText = parsed.text.trim();
+	} catch (e) {
+		// not JSON — treat bodyToSave as plain text
+		if (typeof bodyToSave === 'string' && bodyToSave.trim().length > 0) bodyText = bodyToSave.trim();
+	}
+
+	//Insert thread into database (pass body_text so it's searchable)
+	const created = await createThread(pool, title.trim(), bodyToSave, author_id, category.categories_id, bodyText);
+	// createThread returns { thread_id, slug }
+	res.status(201).json({ ok: true, thread_id: created.thread_id, slug: created.slug });
 	} catch (err) {
 		console.error('Error creating thread', err);
 		res.status(500).json({ ok: false, message: 'Database error' });
