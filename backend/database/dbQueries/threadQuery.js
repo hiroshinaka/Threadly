@@ -44,7 +44,7 @@ let fetchThreadFrontPage = async (pool, limit = 50) => {
     return rows;
 }
 
-let fetchThreadById = async (pool, thread_id) => {
+let fetchThreadById = async (pool, thread_id, userId = null) => {
     const [rows] = await pool.query(
         `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body, t.karma, t.is_active, t.created_at, t.category_id, t.author_id, u.username as author
          FROM thread t
@@ -52,10 +52,24 @@ let fetchThreadById = async (pool, thread_id) => {
          WHERE t.thread_id = ?`,
         [thread_id]
     );
+    if (!rows || !rows.length) return rows;
+
+    // if userId provided, fetch this user's vote on the thread (if any)
+    if (userId) {
+        try {
+            const [vr] = await pool.query('SELECT value FROM thread_reaction WHERE user_id = ? AND thread_id = ? LIMIT 1', [userId, thread_id]);
+            const val = (vr && vr[0] && typeof vr[0].value !== 'undefined') ? Number(vr[0].value) : 0;
+            rows[0].user_vote = val || 0;
+        } catch (e) {
+            // ignore failures (e.g., missing column) and default to 0
+            rows[0].user_vote = 0;
+        }
+    }
+
     return rows;
 }
 
-let fetchComments = async (pool, thread_id) => {
+let fetchComments = async (pool, thread_id, userId = null) => {
     // Determine whether comment_reaction has a numeric `value` column.
     const [colCheck] = await pool.query(
         "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'comment_reaction' AND column_name = 'value' LIMIT 1"
@@ -80,6 +94,29 @@ let fetchComments = async (pool, thread_id) => {
     const byId = {};
     rows.forEach(r => byId[r.comment_id] = { ...r, replies: [] });
     const root = [];
+
+    // If userId provided, fetch this user's reactions for these comments
+    if (userId && rows.length) {
+        const ids = rows.map(r => r.comment_id);
+        const placeholders = ids.map(() => '?').join(',');
+        try {
+            if (hasValue) {
+                const [vr] = await pool.query(`SELECT comment_id, value FROM comment_reaction WHERE user_id = ? AND comment_id IN (${placeholders})`, [userId, ...ids]);
+                const map = {};
+                vr.forEach(v => { map[v.comment_id] = Number(v.value) || 0; });
+                rows.forEach(r => { r.user_vote = map[r.comment_id] || 0; });
+            } else {
+                const [vr] = await pool.query(`SELECT comment_id FROM comment_reaction WHERE user_id = ? AND comment_id IN (${placeholders})`, [userId, ...ids]);
+                const map = {};
+                vr.forEach(v => { map[v.comment_id] = 1; });
+                rows.forEach(r => { r.user_vote = map[r.comment_id] || 0; });
+            }
+        } catch (e) {
+            // ignore and continue without per-comment votes
+            rows.forEach(r => { r.user_vote = 0; });
+        }
+    }
+
     rows.forEach(r => {
         if (r.parent_id) {
             const parent = byId[r.parent_id];

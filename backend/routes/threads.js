@@ -7,7 +7,29 @@ const { fetchThreadFrontPage, fetchThreadById, fetchComments } = require('../dat
 // GET /threads - list recent threads 
 router.get('/', async (req, res) => {
   try {
+    const userId = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
     const threads = await fetchThreadFrontPage(pool, 50);
+    // if user logged in, attach their vote for each thread so frontend can render vote state
+    if (userId && threads && threads.length) {
+      try {
+        const ids = threads.map(t => t.thread_id);
+        const placeholders = ids.map(() => '?').join(',');
+        // attempt to read numeric value column; fallback to presence-only
+        try {
+          const [vr] = await pool.query(`SELECT thread_id, value FROM thread_reaction WHERE user_id = ? AND thread_id IN (${placeholders})`, [userId, ...ids]);
+          const map = {};
+          vr.forEach(v => { map[v.thread_id] = Number(v.value) || 0; });
+          threads.forEach(t => { t.user_vote = map[t.thread_id] || 0; });
+        } catch (e) {
+          const [vr] = await pool.query(`SELECT thread_id FROM thread_reaction WHERE user_id = ? AND thread_id IN (${placeholders})`, [userId, ...ids]);
+          const map = {};
+          vr.forEach(v => { map[v.thread_id] = 1; });
+          threads.forEach(t => { t.user_vote = map[t.thread_id] || 0; });
+        }
+      } catch (e) {
+        // ignore mapping failures
+      }
+    }
     res.json({ ok: true, threads });
   } catch (err) {
     console.error(err);
@@ -19,10 +41,11 @@ router.get('/', async (req, res) => {
 router.get('/:thread_id', async (req, res) => {
   const { thread_id } = req.params;
   try {
-    const rows = await fetchThreadById(pool, thread_id);
+    const userId = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
+    const rows = await fetchThreadById(pool, thread_id, userId);
     if (!rows || !rows.length) return res.status(404).json({ ok: false, message: 'Thread not found' });
     const thread = rows[0];
-    const comments = await fetchComments(thread_id);
+    const comments = await fetchComments(pool, thread_id, userId);
     res.json({ ok: true, thread, comments });
   } catch (err) {
     console.error(err);

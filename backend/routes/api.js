@@ -176,19 +176,50 @@ router.get('/search', async (req, res) => {
 			rows = r;
 		}
 
-		// fallback to LIKE if fulltext returned nothing or query too short
 		if (rows.length === 0) {
 			const likeQ = `%${q}%`;
 			const sql2 = `SELECT thread_id, title, slug, body, karma, created_at, category_id
-						  FROM thread
-						  WHERE title LIKE ? OR body_text LIKE ?
-						  ORDER BY created_at DESC
-						  LIMIT ? OFFSET ?`;
+													FROM thread
+													WHERE title LIKE ? OR body_text LIKE ?
+													ORDER BY created_at DESC
+													LIMIT ? OFFSET ?`;
 			const [r2] = await pool.query(sql2, [likeQ, likeQ, limit, offset]);
 			rows = r2;
 		}
 
-		res.json({ ok: true, query: q, count: rows.length, threads: rows });
+			// --- also search comments (returns comment matches separately) ---
+			let commentRows = [];
+			try {
+				if (q.length >= 3) {
+					const csql = `SELECT comment_id, text, u.username AS author_username, thread_id, author_id, created_at, MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+												FROM comment
+												JOIN user u ON
+												author_id = u.id
+												WHERE MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE)
+												ORDER BY score DESC
+												LIMIT ? OFFSET ?`;
+					const [cr] = await pool.query(csql, [q, q, limit, offset]);
+					commentRows = cr;
+				}
+				if (commentRows.length === 0) {
+					const likeQ = `%${q}%`;
+					const csql2 = `SELECT comment_id, u.username AS author_username, text, thread_id, author_id, created_at
+												 FROM comment
+												 JOIN user u ON
+												 author_id = u.id
+												 WHERE text LIKE ?
+												 ORDER BY created_at DESC
+												 LIMIT ? OFFSET ?`;
+					const [cr2] = await pool.query(csql2, [likeQ, limit, offset]);
+					commentRows = cr2;
+				}
+			} catch (e) {
+				console.error('Comment search failed', e);
+				// don't fail the entire search if comments can't be searched for any reason
+				commentRows = [];
+			}
+
+			res.json({ ok: true, query: q, thread_count: rows.length, threads: rows, comment_count: commentRows.length, comments: commentRows });
 	} catch (err) {
 		console.error('Search error', err);
 		res.status(500).json({ ok: false, message: 'Search failed' });
@@ -229,25 +260,11 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 			const uploadResult = await cloudinary.uploader.upload(dataUri, {
 				folder: 'threadly',
 				resource_type: 'image',
-				eager: [{ width: 400, height: 300, crop: 'fill' }],
-				eager_async: false,
 			});
 
-			// Cloudinary may or may not return eager results immediately depending on the account/config.
-			// Build a reliable thumbnail URL: prefer eager[0], otherwise build transformation URL from public_id.
-			let thumb = null;
-			if (uploadResult && uploadResult.eager && uploadResult.eager[0] && uploadResult.eager[0].secure_url) {
-				thumb = uploadResult.eager[0].secure_url;
-			} else if (uploadResult && uploadResult.public_id) {
-				try {
-					thumb = cloudinary.url(uploadResult.public_id, { width: 400, height: 300, crop: 'fill', secure: true });
-				} catch (e) {
-					thumb = null;
-				}
-			}
-
-			// allow an optional text/description alongside the image if the category permits
-			let imageBody = { type: 'image', url: uploadResult.secure_url, thumbnail_url: thumb, width: uploadResult.width, height: uploadResult.height, public_id: uploadResult.public_id };
+			// Store the original, full-size image URL so the thread view can display the full image.
+			// We intentionally do not persist a thumbnail URL here; the client can resize the image container.
+			let imageBody = { type: 'image', url: uploadResult.secure_url, width: uploadResult.width, height: uploadResult.height, public_id: uploadResult.public_id };
 			if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) {
 				imageBody.text = text.trim();
 			}
