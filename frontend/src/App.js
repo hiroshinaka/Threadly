@@ -6,6 +6,7 @@ import Login from './components/Login';
 import './App.css';
 import Header from './components/Header';
 import ThreadList from './components/ThreadList';
+import Profile from './components/Profile';
 import Footer from './components/Footer';
 import { categories, threads as seedThreads } from './data/mock';
 
@@ -47,6 +48,7 @@ if (activeTab === 'top') {
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+  <Route path="/profile" element={<Profile />} />
         <Route path="/" element={
           <main>
             <section className="section">
