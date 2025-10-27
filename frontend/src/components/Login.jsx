@@ -1,43 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useAuth from '../hooks/useAuth';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const [user, setUser] = useState(null);
+  const { login, user, loggedIn } = useAuth();
 
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const res = await fetch('/api/me', { credentials: 'include' });
-        const data = await res.json();
-        if (data.ok) {
-          // setUser(data.user); idk if needed
-          navigate('/');
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    checkSession();
-  }, [navigate]);
+    if (loggedIn) navigate('/');
+  }, [loggedIn, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
+      const data = await login(username, password);
       setMessage(data.message || '');
-      if (data.ok) {
-        setUser(data.user);
+      if (data && data.ok) {
         navigate('/');
       }
     } catch (err) {
