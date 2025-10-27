@@ -10,6 +10,7 @@ export const AuthContext = createContext({
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [initialized, setInitialized] = useState(false);
   const loggedIn = Boolean(user);
 
   const refresh = async () => {
@@ -35,7 +36,10 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // initial fetch of session
-    refresh();
+    (async () => {
+      await refresh(); // this waits for the refresh to complete before loading the page
+      setInitialized(true);
+    })();
   }, []);
 
   const login = async (username, password) => {
@@ -73,6 +77,10 @@ export function AuthProvider({ children }) {
       return { ok: false };
     }
   };
+
+  if (!initialized) {
+    return null; // can replace w/ loading component if we want 
+  }
 
   return (
     <AuthContext.Provider value={{ user, loggedIn, login, logout, refresh }}>
