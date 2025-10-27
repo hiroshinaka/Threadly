@@ -69,8 +69,30 @@ export default function ThreadModal({ isOpen, onClose, categories = [], selected
       }
       onClose();
     } catch (err) {
-      console.error('onCreate handler failed', err);
-      setError(err.message || 'Failed to create thread');
+        console.error('onCreate handler failed', err);
+        // Extract a friendly message if the error contains JSON (e.g. backend returns '{"ok":false,"message":"..."}')
+        const getErrorMessage = (err) => {
+          if (!err) return null;
+          if (typeof err === 'string') return err;
+          const msg = err.message || String(err);
+          // try to find JSON payload in the message
+          const jsonStart = msg.indexOf('{');
+          const jsonEnd = msg.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+            const jsonPart = msg.slice(jsonStart, jsonEnd + 1);
+            try {
+              const parsed = JSON.parse(jsonPart);
+              if (parsed && parsed.message) return parsed.message;
+            } catch (e) {
+              // ignore parse errors
+            }
+          }
+          // fallback: try to extract after status code text like 'Create thread failed: 401 ...'
+          const parts = msg.split(':').map(p => p.trim()).filter(Boolean);
+          return parts.length ? parts[parts.length - 1] : msg;
+        };
+
+        setError(getErrorMessage(err) || 'Failed to create thread');
     } finally {
       setLoading(false);
     }

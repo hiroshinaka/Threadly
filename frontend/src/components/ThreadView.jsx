@@ -1,41 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
-function renderBody(body) {
-  if (!body) return null;
-  if (typeof body === 'object') {
-    if (body.type === 'image' && (body.thumbnail_url || body.url)) {
-      const src = body.thumbnail_url || body.url;
-      return (
-        <div className="mt-3 w-full max-h-[600px] overflow-hidden rounded-md bg-slate-100">
-          <div className="p-2">{body.text}</div>
-          <br />
-          <img src={src} alt={body.alt || ''} className="w-full h-full object-contain" />
+function renderBody(body_text, mediaArray) {
+  // show body_text first
+  const renderText = () => {
+    if (!body_text) return null;
+    return <p className="mt-2 text-slate-700">{body_text}</p>;
+  };
 
-        </div>
-
-      );
+  const renderMedia = () => {
+    if (!mediaArray) return null;
+    let media = mediaArray;
+    if (typeof mediaArray === 'string') {
+      try { media = JSON.parse(mediaArray); } catch (e) { media = []; }
     }
-    return <p className="mt-2 text-slate-700">{body.text || JSON.stringify(body)}</p>;
-  }
-  try {
-    const parsed = JSON.parse(body);
-    return renderBody(parsed);
-  } catch (err) {
-    return <p className="mt-2 text-slate-700">{body}</p>;
-  }
+    if (!Array.isArray(media) || media.length === 0) return null;
+    // render first media (gallery support can be added later)
+    const m = media[0];
+    if (!m || !m.url) return null;
+    return (
+      <div className="mt-3 w-full rounded-md bg-slate-100">
+        {m.caption && <div className="p-2">{m.caption}</div>}
+        <div className="px-2">
+          <a href={m.url} target="_blank" rel="noopener noreferrer" className="inline-block w-full">
+            <img src={m.url} alt={m.alt || ''} className="w-full h-auto object-contain max-h-[80vh] rounded-md" />
+          </a>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {renderText()}
+      {renderMedia()}
+    </>
+  );
 }
 
 // Stable recursive comment renderer (defined outside the main component so its identity doesn't change between renders)
-function CommentNode({ comment, replyingTo, setReplyingTo, replyText, setReplyText, submitReply, voteComment }) {
+function CommentNode({ comment, replyingTo, setReplyingTo, replyText, setReplyText, submitReply, voteComment, commentVotes }) {
   return (
     <li key={comment.comment_id} className="border rounded-md p-3 bg-white">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-500 mb-1">{comment.username || comment.author_id} • <time dateTime={comment.created_at}>{new Date(comment.created_at).toLocaleString()}</time></div>
+        <div className="text-sm text-slate-500 mb-1">{comment.username || comment.author_id} • <time dateTime={comment.created_at}>{new Date(comment.created_at).toISOString().slice(0,10)}</time></div>
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => voteComment(comment.comment_id, 1)} className="text-slate-500 hover:text-emerald-600">▲</button>
+          <button onClick={() => voteComment(comment.comment_id, 1)} className={`text-slate-500 hover:text-emerald-600 ${commentVotes && commentVotes[comment.comment_id] === 1 ? 'text-emerald-600 font-bold' : ''}`}>▲</button>
           <span className="text-slate-700 font-semibold">{comment.karma || 0}</span>
-          <button onClick={() => voteComment(comment.comment_id, -1)} className="text-slate-500 hover:text-rose-600">▼</button>
+          <button onClick={() => voteComment(comment.comment_id, -1)} className={`text-slate-500 hover:text-rose-600 ${commentVotes && commentVotes[comment.comment_id] === -1 ? 'text-rose-600 font-bold' : ''}`}>▼</button>
         </div>
       </div>
       <div className="mt-2">{comment.text}</div>
@@ -75,6 +87,9 @@ export default function ThreadView() {
   const [error, setError] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null); // comment_id being replied to
   const [replyText, setReplyText] = useState('');
+  const [commentVotes, setCommentVotes] = useState({}); // comment_id -> 1|-1|0
+
+  // If an image is present and we measured its natural size, use that to adapt the left column width
 
   useEffect(() => {
     const load = async () => {
@@ -93,6 +108,14 @@ export default function ThreadView() {
           const body = await res.json();
           setThread(body.thread);
           setComments(body.comments || []);
+          // initialize comment votes from server if present
+          if (body.comments && Array.isArray(body.comments)) {
+            const mapping = {};
+            body.comments.forEach(c => {
+              mapping[c.comment_id] = Number(c.user_vote ?? c.user_vote_value ?? c.current_user_vote ?? c.user_vote_by_current_user ?? 0) || 0;
+            });
+            setCommentVotes(mapping);
+          }
           return;
         }
 
@@ -112,6 +135,13 @@ export default function ThreadView() {
         if (!detail.ok) throw new Error(`${detail.status} ${await detail.text()}`);
         const detailBody = await detail.json();
         setComments(detailBody.comments || []);
+        if (detailBody.comments && Array.isArray(detailBody.comments)) {
+          const mapping = {};
+          detailBody.comments.forEach(c => {
+            mapping[c.comment_id] = Number(c.user_vote ?? c.user_vote_value ?? c.current_user_vote ?? c.user_vote_by_current_user ?? 0) || 0;
+          });
+          setCommentVotes(mapping);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -162,9 +192,15 @@ export default function ThreadView() {
   };
 
   const voteComment = async (commentId, value) => {
-    setComments(prev => prev.map(c => (c.comment_id === commentId ? { ...c, karma: (c.karma||0) + value } : c)));
+    // toggle behavior: if user already voted same value, remove vote (send 0)
+    const current = commentVotes[commentId] || 0;
+    const toSend = current === value ? 0 : value;
+    // compute optimistic delta
+    const delta = toSend === 0 ? -current : (current === 0 ? value : (value - current));
+    setComments(prev => prev.map(c => (c.comment_id === commentId ? { ...c, karma: (c.karma||0) + delta } : c)));
+    setCommentVotes(prev => ({ ...prev, [commentId]: toSend }));
     try {
-      const res = await fetch(`/api/threads/comments/${commentId}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+      const res = await fetch(`/api/threads/comments/${commentId}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) });
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json();
       // reconcile authoritative karma
@@ -183,28 +219,32 @@ export default function ThreadView() {
   if (!thread) return <div className="p-6">Thread not found</div>;
 
   return (
-    <main className="max-w-3xl mx-auto p-6">
-      <article className="bg-white border border-slate-200 p-6 rounded-md">
-        <h1 className="text-2xl font-semibold mb-2">{thread.title}</h1>
-        <div className="text-sm text-slate-500 mb-4">by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toLocaleString()}</time></div>
-        <div className="prose max-w-full">{renderBody(thread.body)}</div>
-      </article>
+    <main className="w-full p-6">
+      <div className="flex flex-col md:flex-row md:items-start gap-6">
+  <article className="bg-white border border-slate-200 p-6 rounded-md md:w-1/2">
+          <h1 className="text-2xl font-semibold mb-2">{thread.title}</h1>
+          <div className="text-sm text-slate-500 mb-4">by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time></div>
+          <div className="prose max-w-full">{renderBody(thread.body_text, thread.media)}</div>
+        </article>
 
-      <section className="mt-6">
-        <h2 className="text-lg font-medium mb-2">Comments</h2>
-        <form onSubmit={submitComment} className="space-y-2">
-          <textarea value={text} onChange={e => setText(e.target.value)} className="w-full border rounded-md p-2" rows={4} placeholder="Add a comment..." />
-          <div>
-            <button className="px-4 py-2 bg-slate-900 text-white rounded-md">Post comment</button>
+        <aside className="mt-4 md:mt-0 md:w-1/2">
+          <div className="bg-white border border-slate-200 p-4 rounded-md md:h-[calc(100vh-4rem)] md:overflow-auto">
+            <h2 className="text-lg font-medium mb-2">Comments</h2>
+            <form onSubmit={submitComment} className="space-y-2">
+              <textarea value={text} onChange={e => setText(e.target.value)} className="w-full border rounded-md p-2" rows={4} placeholder="Add a comment..." />
+              <div>
+                <button className="px-4 py-2 bg-slate-900 text-white rounded-md">Post comment</button>
+              </div>
+            </form>
+
+            <ul className="mt-4 space-y-3 max-h-[60vh] overflow-auto">
+              {comments.map(c => (
+                <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} />
+              ))}
+            </ul>
           </div>
-        </form>
-
-        <ul className="mt-4 space-y-3">
-          {comments.map(c => (
-            <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} />
-          ))}
-        </ul>
-      </section>
+        </aside>
+      </div>
     </main>
   );
 }

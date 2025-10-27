@@ -16,6 +16,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categories, setCategories] = useState([]);
   const [threadsData, setThreadsData] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(8);
 
   useEffect(() => {
     // fetch categories and threads from backend
@@ -43,6 +44,36 @@ function App() {
     };
     load();
   }, []);
+
+  // reset visible count when sorting or category changes so the user sees the top of the new list
+  useEffect(() => {
+    setVisibleCount(8);
+  }, [activeTab, selectedCategory]);
+
+  // infinite scroll: when the user scrolls near the bottom, reveal more threads
+  useEffect(() => {
+    const onScroll = () => {
+      // compute the total number of threads after category filtering (same logic used when rendering)
+      const totalFiltered = threadsData.filter(t => {
+        if (!selectedCategory) return true;
+        const slug = t.categorySlug || t.category_slug || (t.category && t.category.slug);
+        const id = t.categoryId || t.category_id || t.categories_id;
+        const name = t.category && t.category.name;
+        return selectedCategory === slug || selectedCategory === String(id) || selectedCategory === name;
+      }).length;
+
+      // only try to load more if we still have hidden threads
+      if (visibleCount >= totalFiltered) return;
+
+      const scrolledToBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 120;
+      if (scrolledToBottom) {
+        setVisibleCount(prev => Math.min(prev + 8, totalFiltered));
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [visibleCount, threadsData, selectedCategory, activeTab]);
 
 
   const threads = useMemo(() => {
@@ -127,7 +158,7 @@ return (
                       const name = t.category && t.category.name;
                       return selectedCategory === slug || selectedCategory === String(id) || selectedCategory === name;
                     })
-                    .slice(0, 8)}
+                    .slice(0, visibleCount)}
                 />
               </div>
             </section>
