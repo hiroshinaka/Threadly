@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { AuthProvider } from './context/AuthContext';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Signup from './components/Signup';
 import Login from './components/Login';
@@ -34,14 +35,15 @@ if (activeTab === 'top') {
 }, [activeTab]);
 
 
-return (
+  return (
   <Router>
-    <div className="app">
-      <Header
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-      />
+    <AuthProvider>
+      <div className="app">
+        <Header
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
@@ -80,8 +82,9 @@ return (
           </main>
         } />
       </Routes>
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </AuthProvider>
   </Router>
 );
 }
