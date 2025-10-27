@@ -281,7 +281,7 @@ export default function Header({
           >
             <div className="p-4 flex items-center justify-between border-b border-slate-200">
               <a
-                href="#home"
+                href="/"
                 className="flex items-center gap-2 font-semibold text-slate-800"
                 onClick={() => setOpen(false)}
               >
@@ -314,7 +314,7 @@ export default function Header({
             {/* Mobile Menu Content */}
             <div className="p-4 space-y-4">
               <a
-                href="#explore"
+                href="/"
                 className="block text-slate-700 hover:text-slate-900 text-base font-medium"
                 onClick={() => setOpen(false)}
               >
