@@ -108,6 +108,13 @@ router.post('/login', async (req, res) => {
     }
 });
 
+router.get('/me', (req, res) => {
+	if (req.session && req.session.user) {
+		return res.json({ ok: true, user: req.session.user });
+	}
+	return res.json({ ok: false });
+});
+
 router.post('/logout', (req, res) => {
     req.session.destroy((err) => {
         if (err) {
