@@ -6,7 +6,7 @@ const threadsRouter = require('./threads');
 const cloudinary = require('cloudinary').v2;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1024*1024 } });
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
-const { createThread } = require('../database/dbQueries/threadQuery');
+const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
 
 const bcrypt = require('bcryptjs');
@@ -167,7 +167,7 @@ router.get('/search', async (req, res) => {
 		// Fulltext search works best for queries of length >= 3. For very short queries use LIKE fallback.
 		let rows = [];
 		if (q.length >= 3) {
-			const sql = `SELECT thread_id, title, slug, body, karma, created_at, category_id, MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+			const sql = `SELECT thread_id, title, slug, body_text, karma, created_at, category_id, MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
 						 FROM thread
 						 WHERE MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE)
 						 ORDER BY score DESC
@@ -178,7 +178,7 @@ router.get('/search', async (req, res) => {
 
 		if (rows.length === 0) {
 			const likeQ = `%${q}%`;
-			const sql2 = `SELECT thread_id, title, slug, body, karma, created_at, category_id
+			const sql2 = `SELECT thread_id, title, slug, body_text, karma, created_at, category_id
 													FROM thread
 													WHERE title LIKE ? OR body_text LIKE ?
 													ORDER BY created_at DESC
@@ -249,7 +249,8 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 		if (!catRows.length) return res.status(400).json({ ok: false, message: 'Invalid category' });
 		const category = catRows[0];
 
-		let bodyToSave = null;
+	let bodyToSave = null;
+	let uploadResult = null;
 
 		if (req.file) {
 			if (!category.photo_allow) {
@@ -257,14 +258,13 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 			}
 			// upload buffer to cloudinary
 			const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-			const uploadResult = await cloudinary.uploader.upload(dataUri, {
+			uploadResult = await cloudinary.uploader.upload(dataUri, {
 				folder: 'threadly',
 				resource_type: 'image',
 			});
 
 			// Store the original, full-size image URL so the thread view can display the full image.
-			// We intentionally do not persist a thumbnail URL here; the client can resize the image container.
-			let imageBody = { type: 'image', url: uploadResult.secure_url, width: uploadResult.width, height: uploadResult.height, public_id: uploadResult.public_id };
+			let imageBody = { type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
 			if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) {
 				imageBody.text = text.trim();
 			}
@@ -285,9 +285,20 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 	}
 
 	//Insert thread into database (pass body_text so it's searchable)
-	const created = await createThread(pool, title.trim(), bodyToSave, author_id, category.categories_id, bodyText);
-	// createThread returns { thread_id, slug }
-	res.status(201).json({ ok: true, thread_id: created.thread_id, slug: created.slug });
+		const created = await createThread(pool, title.trim(), author_id, category.categories_id, bodyText);
+		// if we uploaded an image, persist it to thread_media
+				if (req.file) {
+					try {
+						const media = { media_type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
+						if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) media.caption = text.trim();
+						await insertThreadMedia(pool, created.thread_id, media);
+					} catch (e) {
+						console.error('Failed to insert thread media', e);
+					}
+				}
+
+		// createThread returns { thread_id, slug }
+		res.status(201).json({ ok: true, thread_id: created.thread_id, slug: created.slug });
 	} catch (err) {
 		console.error('Error creating thread', err);
 		res.status(500).json({ ok: false, message: 'Database error' });
