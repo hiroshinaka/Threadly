@@ -9,7 +9,6 @@ import Profile from './components/Profile';
 import Footer from './components/Footer';
 import ThreadView from './components/ThreadView';
 import SearchResults from './components/SearchResults';
-import { getJSON } from './lib/api';
 // We'll fetch categories and threads from the backend instead of using mock data
 
 
@@ -24,16 +23,22 @@ function App() {
     // fetch categories and threads from backend
     const load = async () => {
       try {
-        const cBody = await getJSON('/api/categories');
-        setCategories(cBody.categories || []);
+        const cRes = await fetch('/api/categories');
+        if (cRes.ok) {
+          const cBody = await cRes.json();
+          setCategories(cBody.categories || []);
+        }
       } catch (err) {
         console.error('Failed to load categories', err);
       }
 
       try {
-        const tBody = await getJSON('/api/threads');
-        // threads router returns { ok:true, threads }
-        setThreadsData(tBody.threads || []);
+        const tRes = await fetch('/api/threads');
+        if (tRes.ok) {
+          const tBody = await tRes.json();
+          // threads router returns { ok:true, threads }
+          setThreadsData(tBody.threads || []);
+        }
       } catch (err) {
         console.error('Failed to load threads', err);
       }
