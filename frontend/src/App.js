@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Signup from './components/Signup';
 import Login from './components/Login';
 import './App.css';
 import Header from './components/Header';
 import ThreadList from './components/ThreadList';
+import Profile from './components/Profile';
 import Footer from './components/Footer';
 import ThreadView from './components/ThreadView';
 import SearchResults from './components/SearchResults';
@@ -111,19 +112,18 @@ function App() {
   }, [activeTab, threadsData]);
 
 
-return (
+  return (
   <Router>
-    <div className="app">
-      <Header
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-      />
+    <AuthProvider>
+      <div className="app">
+        <Header
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/t/:slug/:id" element={<ThreadView />} />
-        <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
           <main>
             <section className="section">
@@ -165,8 +165,9 @@ return (
           </main>
         } />
       </Routes>
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </AuthProvider>
   </Router>
 );
 }
