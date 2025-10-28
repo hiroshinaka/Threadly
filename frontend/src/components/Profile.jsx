@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useAuth from '../hooks/useAuth';
-import { threads as seedThreads } from '../data/mock';
 
 export default function Profile() {
   const { user, loggedIn } = useAuth();
