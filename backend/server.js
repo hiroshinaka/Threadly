@@ -12,7 +12,7 @@ const app = express();
 // ---- CORS: do NOT use "*" with credentials:true
 const allowlist = [
   process.env.FRONTEND_ORIGIN,  
-  'https://threadly-phi.vercel.app/',     // e.g. https://your-frontend.vercel.app
+  'https://threadly-phi.vercel.app',     // e.g. https://your-frontend.vercel.app
   'http://localhost:5173',
   'http://localhost:3000'
 ].filter(Boolean);
