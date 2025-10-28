@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
+import { AuthProvider } from './context/AuthContext';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Signup from './components/Signup';
 import Login from './components/Login';
 import './App.css';
 import Header from './components/Header';
 import ThreadList from './components/ThreadList';
+import Profile from './components/Profile';
 import Footer from './components/Footer';
 import { categories, threads as seedThreads } from './data/mock';
 
@@ -34,17 +36,19 @@ if (activeTab === 'top') {
 }, [activeTab]);
 
 
-return (
+  return (
   <Router>
-    <div className="app">
-      <Header
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-      />
+    <AuthProvider>
+      <div className="app">
+        <Header
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+  <Route path="/profile" element={<Profile />} />
         <Route path="/" element={
           <main>
             <section className="section">
@@ -80,8 +84,9 @@ return (
           </main>
         } />
       </Routes>
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </AuthProvider>
   </Router>
 );
 }

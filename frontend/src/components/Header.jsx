@@ -4,6 +4,7 @@ import SearchBar from "./SearchBar";
 import CategoryModal from './CategoryModal';
 import ThreadModal from './ThreadModal';
 import logo from "../images/spool-of-thread.png";
+import useAuth from '../hooks/useAuth';
 
 export default function Header({
   categories = [],
@@ -17,6 +18,7 @@ export default function Header({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const navigate = useNavigate();
   const [localCategories, setLocalCategories] = useState(categories || []);
+  const { user, loggedIn, logout } = useAuth();
 
   const defaultCreateCategory = async (payload) => {
     try {
@@ -142,7 +144,7 @@ export default function Header({
             </button>
 
             <div className="flex items-center gap-3 ml-4 flex-nowrap">
-              {!isLoggedIn ? (
+                  {!loggedIn ? (
                 <>
                   <button
                     className="h-[44px] px-5 font-medium whitespace-nowrap rounded-md border border-slate-300 text-base text-slate-700 transition-colors duration-200 ease-in-out hover:bg-gray-100 hover:text-gray-900"
@@ -161,14 +163,14 @@ export default function Header({
                 <div className="relative hidden md:block">
                   <button
                     type="button"
-                    className="overflow-hidden rounded-full border border-gray-300 shadow-inner transition-shadow duration-200 ease-in-out hover:bg-cyan-200 min-h-[44px] w-[44px]"
+                    className="flex items-center justify-center overflow-hidden rounded-full border border-gray-300 shadow-inner transition-shadow duration-200 ease-in-out hover:bg-cyan-200 min-h-[44px] w-[44px]"
                     onClick={() => setShowProfileMenu((v) => !v)}
                   >
                     <span className="sr-only">Toggle dashboard menu</span>
                     <img
-                      src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop"
-                      alt="User"
-                      className="size-10 object-cover"
+                      src={user?.avatar || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop"}
+                      alt={user ? user.username : "User"}
+                      className="h-10 w-10 rounded-full object-cover"
                     />
                   </button>
 
@@ -200,29 +202,35 @@ export default function Header({
                         >
                           Categories 
                         </button>
-                        <form method="POST" action="#">
-                          <button
-                            type="submit"
-                            className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-base text-red-700 hover:bg-red-50"
-                            role="menuitem"
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await logout();
+                            } finally {
+                              setShowProfileMenu(false);
+                              navigate('/');
+                            }
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-base text-red-700 hover:bg-red-50"
+                          role="menuitem"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth="1.5"
+                            stroke="currentColor"
+                            className="h-4 w-4"
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth="1.5"
-                              stroke="currentColor"
-                              className="size-4"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
-                              />
-                            </svg>
-                            Logout
-                          </button>
-                        </form>
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3"
+                            />
+                          </svg>
+                          Logout
+                        </button>
                       </div>
                     </div>
                   )}
@@ -273,7 +281,7 @@ export default function Header({
           >
             <div className="p-4 flex items-center justify-between border-b border-slate-200">
               <a
-                href="#home"
+                href="/"
                 className="flex items-center gap-2 font-semibold text-slate-800"
                 onClick={() => setOpen(false)}
               >
@@ -306,7 +314,7 @@ export default function Header({
             {/* Mobile Menu Content */}
             <div className="p-4 space-y-4">
               <a
-                href="#explore"
+                href="/"
                 className="block text-slate-700 hover:text-slate-900 text-base font-medium"
                 onClick={() => setOpen(false)}
               >
@@ -359,24 +367,53 @@ export default function Header({
 
               {/* Mobile Buttons */}
               <div className="pt-4 flex gap-3">
-                <button
-                  className="flex-1 h-[44px] px-5 rounded-md border border-slate-300 text-base font-medium text-slate-700 transition-colors duration-200 ease-in-out hover:bg-gray-100 hover:text-gray-900"
-                  onClick={() => {
-                    navigate("/login");
-                    setOpen(false);
-                  }}
-                >
-                  Log in
-                </button>
-                <button
-                  className="flex-1 h-[44px] px-5 rounded-md bg-gray-900 text-white text-base font-medium transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-white"
-                  onClick={() => {
-                    navigate("/signup");
-                    setOpen(false);
-                  }}
-                >
-                  Sign up
-                </button>
+                {!loggedIn ? (
+                  <>
+                    <button
+                      className="flex-1 h-[44px] px-5 rounded-md border border-slate-300 text-base font-medium text-slate-700 transition-colors duration-200 ease-in-out hover:bg-gray-100 hover:text-gray-900"
+                      onClick={() => {
+                        navigate("/login");
+                        setOpen(false);
+                      }}
+                    >
+                      Log in
+                    </button>
+                    <button
+                      className="flex-1 h-[44px] px-5 rounded-md bg-gray-900 text-white text-base font-medium transition-colors duration-200 ease-in-out hover:bg-gray-700 hover:text-white"
+                      onClick={() => {
+                        navigate("/signup");
+                        setOpen(false);
+                      }}
+                    >
+                      Sign up
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="flex-1 h-[44px] px-5 rounded-md border border-slate-300 text-base font-medium text-slate-700 transition-colors duration-200 ease-in-out hover:bg-gray-100 hover:text-gray-900"
+                      onClick={() => {
+                        navigate('/profile');
+                        setOpen(false);
+                      }}
+                    >
+                      Profile
+                    </button>
+                    <button
+                      className="w-full h-[44px] px-5 rounded-md bg-red-50 text-red-700 text-base font-medium hover:bg-red-100"
+                      onClick={async () => {
+                        try {
+                          await logout();
+                        } finally {
+                          setOpen(false);
+                          navigate('/');
+                        }
+                      }}
+                    >
+                      Logout
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useAuth from '../hooks/useAuth';
 
 const Signup = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
   
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,10 +16,18 @@ const Signup = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    const data = await res.json();
-    setMessage(data.message || '');
+  const data = await res.json();
 
     if (data.ok) {
+      try {
+        const loginRes = await login(username, password);
+        if (loginRes && loginRes.ok) {
+          navigate('/');
+          return;
+        }
+      } catch (err) {
+        console.error('Auto-login after signup failed', err);
+      }
       navigate('/');
     }
   };
@@ -59,7 +68,7 @@ const Signup = () => {
             Sign Up
           </button>
         </form>
-        {message && <p className="text-center text-sm text-red-600 mt-4">{message}</p>}
+        {/* Signup redirects immediately; no inline message shown */}
       </div>
     </div>
   );
