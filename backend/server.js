@@ -1,59 +1,60 @@
+// backend/server.js
 const express = require('express');
-const path = require('path');
 const session = require('express-session');
-const mongoStore = require('./database/connections/mongoStoreConnection');
 const cors = require('cors');
 require('dotenv').config();
 
-const PORT = process.env.PORT || 5000;
+const mongoStore = require('./database/connections/mongoStoreConnection');
 
+const PORT = process.env.PORT || 5000;
 const app = express();
 
+// ---- CORS: do NOT use "*" with credentials:true
+const allowlist = [
+  process.env.FRONTEND_ORIGIN,  
+  'https://threadly-phi.vercel.app/',     // e.g. https://your-frontend.vercel.app
+  'http://localhost:5173',
+  'http://localhost:3000'
+].filter(Boolean);
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, cb) => {
+    // allow same-origin/SSR/no Origin and allowlisted origins
+    if (!origin || allowlist.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS blocked for origin ${origin}`));
+  },
   credentials: true
 }));
 
+app.use(express.json());
 
-app.set('trust proxy', 1); // needed on Render for secure cookies
+// ---- Sessions (cross-site cookie for Vercel -> Render)
+app.set('trust proxy', 1);
 const sessionOptions = {
   secret: process.env.NODE_SESSION_SECRET || 'defaultsecret',
   resave: false,
   saveUninitialized: false,
   cookie: {
     sameSite: 'none',
-    secure: true,                
+    secure: true,
     maxAge: 24 * 60 * 60 * 1000
   }
 };
-app.use(express.json());
-
-if (mongoStore) {
-    sessionOptions.store = mongoStore;
-} else {
-    console.warn('Mongo session store not available — using default MemoryStore. Sessions will not be persisted across restarts.');
-}
-
+if (mongoStore) sessionOptions.store = mongoStore;
 app.use(session(sessionOptions));
 
-const publicPath = path.join(__dirname, '../frontend/build');
-
-app.use(express.static(publicPath));
-
+// ---- API routes ONLY (no static React here)
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-const apiRouter = require('./routes/api');
+
+const apiRouter = require('./routes/api'); // make sure /api/auth/login lives here
 app.use('/api', apiRouter);
 
-app.use((_req, res) => res.status(404).json({ ok: false, message: 'Not found' }));
-
-
-app.use((req, res) => {
-    res.sendFile(path.join(publicPath, 'index.html'));
+// 404 JSON (no index.html fallbacks!)
+app.all('*', (req, res) => {
+  res.status(404).json({ ok: false, message: 'Not found', path: req.originalUrl });
 });
 
-app.use((_req, res) => res.status(404).json({ ok: false, message: 'Not found' }));
-
-// --- Global error handler so client always gets JSON
+// Global error handler → always JSON
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err);
@@ -62,8 +63,4 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-});
-
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
 });
