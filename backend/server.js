@@ -49,10 +49,11 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 const apiRouter = require('./routes/api'); // make sure /api/auth/login lives here
 app.use('/api', apiRouter);
 
-// 404 JSON (no index.html fallbacks!)
-app.all('*', (req, res) => {
+// 404 JSON (no index.html fallbacks)
+app.use((req, res) => {
   res.status(404).json({ ok: false, message: 'Not found', path: req.originalUrl });
 });
+
 
 // Global error handler → always JSON
 // eslint-disable-next-line no-unused-vars
