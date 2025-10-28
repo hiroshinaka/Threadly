@@ -59,7 +59,7 @@ router.post('/:thread_id/comments', async (req, res) => {
   const { text, parent_id } = req.body;
   // prefer session user id if available
   const author_id = (req.session && req.session.user && req.session.user.id) || req.body.author_id;
-  if (!author_id || !text) return res.status(400).json({ ok: false, message: 'author_id and text required (login first)' });
+  if (!author_id || !text) return res.status(400).json({ ok: false, message: 'Please log in or sign up first to comment' });
   try {
     // ensure thread exists
     const [trows] = await pool.query('SELECT thread_id FROM thread WHERE thread_id = ?', [thread_id]);
@@ -82,7 +82,7 @@ router.post('/:thread_id/vote', async (req, res) => {
   try {
     const { thread_id } = req.params;
     const userId = req.session && req.session.user && req.session.user.id;
-    if (!userId) return res.status(401).json({ ok: false, message: 'Login required' });
+    if (!userId) return res.status(401).json({ ok: false, message: 'Please log in or sign up first to vote' });
     let { value } = req.body;
     value = Number(value);
     if (![1, -1, 0].includes(value)) return res.status(400).json({ ok: false, message: 'Invalid vote value' });
@@ -100,7 +100,7 @@ router.post('/comments/:comment_id/vote', async (req, res) => {
   try {
     const { comment_id } = req.params;
     const userId = req.session && req.session.user && req.session.user.id;
-    if (!userId) return res.status(401).json({ ok: false, message: 'Login required' });
+    if (!userId) return res.status(401).json({ ok: false, message: 'Please log in or sign up first to vote' });
     let { value } = req.body;
     value = Number(value);
     if (![1, -1, 0].includes(value)) return res.status(400).json({ ok: false, message: 'Invalid vote value' });

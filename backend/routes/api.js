@@ -8,6 +8,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
 const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
+const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
 
 const bcrypt = require('bcryptjs');
 const joi = require('joi');
@@ -302,6 +303,37 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 	} catch (err) {
 		console.error('Error creating thread', err);
 		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+
+
+// POST /api/threads/:id/view
+router.post('/threads/:id/view', async (req, res) => {
+	try {
+		const threadId = Number(req.params.id);
+		if (!threadId) return res.status(400).json({ ok: false, message: 'Invalid thread id' });
+
+		// determine identifiers for dedupe
+		const viewer_id = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
+		const session_id = req.sessionID || (req.cookies && req.cookies['connect.sid']) || null;
+		const ipHash = hashIp(req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress);
+
+		// Decide whether to insert a raw event for auditing/dedupe
+		const should = await shouldRecordView(pool, { thread_id: threadId, viewer_id, session_id, ip_hash: ipHash, windowMinutes: 60 });
+
+		// Always increment the cached counter so the UI shows an updated total when the client signals a view.
+		const newCount = await incrementThreadViewCount(pool, threadId, 1);
+
+		let insertId = null;
+		if (should) {
+			insertId = await insertViewEvent(pool, { thread_id: threadId, viewer_id, session_id, ip_hash: ipHash });
+		}
+
+		res.json({ ok: true, recorded: should, inserted_id: insertId, view_count: newCount });
+	} catch (err) {
+		console.error('Error recording view', err);
+		res.status(500).json({ ok: false, message: 'Failed to record view' });
 	}
 });
 
