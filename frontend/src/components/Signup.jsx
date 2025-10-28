@@ -13,10 +13,11 @@ const Signup = () => {
     e.preventDefault();
     const res = await fetch('/api/signup', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-  const data = await res.json();
+    const data = res.headers.get('content-type') && res.headers.get('content-type').includes('application/json') ? await res.json() : { ok: false };
 
     if (data.ok) {
       try {

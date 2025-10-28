@@ -4,6 +4,7 @@ import Signup from './components/Signup';
 import Login from './components/Login';
 import './App.css';
 import Header from './components/Header';
+import AuthProvider from './context/AuthContext';
 import ThreadList from './components/ThreadList';
 import Profile from './components/Profile';
 import Footer from './components/Footer';
@@ -134,7 +135,7 @@ function App() {
 
   return (
   <Router>
-    {/* <AuthProvider> */}
+    <AuthProvider>
       <div className="app">
         <Header
           categories={categories}
@@ -144,6 +145,9 @@ function App() {
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/t/:slug/:id" element={<ThreadView />} />
+        <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
           <main>
             <section className="section">
@@ -187,7 +191,7 @@ function App() {
       </Routes>
         <Footer />
       </div>
-    {/* </AuthProvider> */}
+    </AuthProvider>
   </Router>
 );
 }
