@@ -88,6 +88,49 @@ export default function ThreadView() {
   const [replyingTo, setReplyingTo] = useState(null); // comment_id being replied to
   const [replyText, setReplyText] = useState('');
   const [commentVotes, setCommentVotes] = useState({}); // comment_id -> 1|-1|0
+  // removed IntersectionObserver fallback — view POST is sent immediately on load
+
+  // helper: flatten nested comments into a single array (includes replies)
+  const flattenComments = (list) => {
+    const out = [];
+    if (!list || !Array.isArray(list)) return out;
+    const walk = (items) => {
+      items.forEach(it => {
+        out.push(it);
+        if (it.replies && Array.isArray(it.replies) && it.replies.length) walk(it.replies);
+      });
+    };
+    walk(list);
+    return out;
+  };
+
+  // helper: update karma for a comment id anywhere in the nested tree (returns new tree)
+  const updateCommentKarma = (items, commentId, delta) => {
+    if (!items || !Array.isArray(items)) return items;
+    return items.map(it => {
+      if (it.comment_id === commentId) {
+        return { ...it, karma: (Number(it.karma) || 0) + delta };
+      }
+      if (it.replies && it.replies.length) {
+        return { ...it, replies: updateCommentKarma(it.replies, commentId, delta) };
+      }
+      return it;
+    });
+  };
+
+  // helper: set karma to an absolute value for a comment id anywhere in the nested tree
+  const setCommentKarma = (items, commentId, value) => {
+    if (!items || !Array.isArray(items)) return items;
+    return items.map(it => {
+      if (it.comment_id === commentId) {
+        return { ...it, karma: value };
+      }
+      if (it.replies && it.replies.length) {
+        return { ...it, replies: setCommentKarma(it.replies, commentId, value) };
+      }
+      return it;
+    });
+  };
 
   // If an image is present and we measured its natural size, use that to adapt the left column width
 
@@ -107,11 +150,12 @@ export default function ThreadView() {
           if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
           const body = await res.json();
           setThread(body.thread);
+          try { await fetch(`/api/threads/${body.thread.thread_id}/view`, { method: 'POST', credentials: 'include' }); } catch (e) { }
           setComments(body.comments || []);
-          // initialize comment votes from server if present
+          // initialize comment votes from server if present (include nested replies)
           if (body.comments && Array.isArray(body.comments)) {
             const mapping = {};
-            body.comments.forEach(c => {
+            flattenComments(body.comments).forEach(c => {
               mapping[c.comment_id] = Number(c.user_vote ?? c.user_vote_value ?? c.current_user_vote ?? c.user_vote_by_current_user ?? 0) || 0;
             });
             setCommentVotes(mapping);
@@ -131,13 +175,14 @@ export default function ThreadView() {
         }
         // populate thread and fetch its comments using the numeric id
         setThread(found);
+        try { await fetch(`/api/threads/${found.thread_id}/view`, { method: 'POST', credentials: 'include' }); } catch (e) {}
         const detail = await fetch(`/api/threads/${found.thread_id}`);
         if (!detail.ok) throw new Error(`${detail.status} ${await detail.text()}`);
         const detailBody = await detail.json();
         setComments(detailBody.comments || []);
         if (detailBody.comments && Array.isArray(detailBody.comments)) {
           const mapping = {};
-          detailBody.comments.forEach(c => {
+          flattenComments(detailBody.comments).forEach(c => {
             mapping[c.comment_id] = Number(c.user_vote ?? c.user_vote_value ?? c.current_user_vote ?? c.user_vote_by_current_user ?? 0) || 0;
           });
           setCommentVotes(mapping);
@@ -151,14 +196,30 @@ export default function ThreadView() {
     load();
   }, [identifier]);
 
+  // IntersectionObserver fallback removed — views are recorded immediately on load
+
   const submitComment = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
     try {
-    const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || 'Failed to post comment');
+        // prefer structured JSON message if present, otherwise fall back to text
+        let msg = 'Failed to post comment';
+        try {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const j = await res.json();
+            msg = (j && (j.message || j.msg || j.error)) ? (j.message || j.msg || j.error) : JSON.stringify(j);
+          } else {
+            const t = await res.text();
+            msg = t || msg;
+          }
+        } catch (e) {
+          const t = await res.text().catch(() => null);
+          if (t) msg = t;
+        }
+        throw new Error(msg);
       }
       // refresh comments
       const refresh = await fetch(`/api/threads/${thread.thread_id}`);
@@ -177,8 +238,21 @@ export default function ThreadView() {
     try {
       const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: replyText, parent_id: parentId }) });
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || 'Failed to post reply');
+        let msg = 'Failed to post reply';
+        try {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const j = await res.json();
+            msg = (j && (j.message || j.msg || j.error)) ? (j.message || j.msg || j.error) : JSON.stringify(j);
+          } else {
+            const t = await res.text();
+            msg = t || msg;
+          }
+        } catch (e) {
+          const t = await res.text().catch(() => null);
+          if (t) msg = t;
+        }
+        throw new Error(msg);
       }
       // refresh
       const refresh = await fetch(`/api/threads/${thread.thread_id}`);
@@ -197,14 +271,34 @@ export default function ThreadView() {
     const toSend = current === value ? 0 : value;
     // compute optimistic delta
     const delta = toSend === 0 ? -current : (current === 0 ? value : (value - current));
-    setComments(prev => prev.map(c => (c.comment_id === commentId ? { ...c, karma: (c.karma||0) + delta } : c)));
+
+    // optimistic update (supports nested replies)
+    setComments(prev => updateCommentKarma(prev, commentId, delta));
     setCommentVotes(prev => ({ ...prev, [commentId]: toSend }));
+
     try {
       const res = await fetch(`/api/threads/comments/${commentId}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        // prefer structured JSON message if present, otherwise fall back to text
+        let msg = 'Vote failed';
+        try {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const j = await res.json();
+            msg = (j && (j.message || j.msg || j.error)) ? (j.message || j.msg || j.error) : JSON.stringify(j);
+          } else {
+            const t = await res.text();
+            msg = t || msg;
+          }
+        } catch (e) {
+          const t = await res.text().catch(() => null);
+          if (t) msg = t;
+        }
+        throw new Error(msg);
+      }
       const body = await res.json();
-      // reconcile authoritative karma
-      setComments(prev => prev.map(c => (c.comment_id === commentId ? { ...c, karma: body.karma } : c)));
+      // reconcile authoritative karma (supports nested replies)
+      setComments(prev => setCommentKarma(prev, commentId, body.karma));
     } catch (err) {
       // on error, rollback optimistic (simple strategy: refetch comments)
       const refresh = await fetch(`/api/threads/${thread.thread_id}`);
@@ -213,6 +307,11 @@ export default function ThreadView() {
       setError(err.message || 'Vote failed');
     }
   };
+
+  // compute derived stats (include nested replies)
+  const totalCommentVotes = flattenComments(comments).reduce((s, c) => s + (Number(c.karma) || 0), 0);
+  const viewCount = thread ? (thread.view_count ?? thread.viewCount ?? thread.views ?? 0) : 0;
+  const threadKarma = thread ? (thread.karma || 0) : 0;
 
   if (loading) return <div className="p-6">Loading...</div>;
   if (error) return <div className="p-6 text-rose-600">Error: {error}</div>;
@@ -228,8 +327,47 @@ export default function ThreadView() {
         </article>
 
         <aside className="mt-4 md:mt-0 md:w-1/2">
-          <div className="bg-white border border-slate-200 p-4 rounded-md md:h-[calc(100vh-4rem)] md:overflow-auto">
-            <h2 className="text-lg font-medium mb-2">Comments</h2>
+        <div>
+          <div className="bg-white border border-slate-200 p-4 rounded-md md:overflow-auto">
+            <h2 className="text-lg font-bold mb-3">Thread stats</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-md shadow-sm">
+                <i class="fa-solid fa-eye w-6 h-6 text-slate-500 flex-none"></i>
+                <div className="flex-1">
+                  <div className="text-xs text-slate-500">Views</div>
+                  <div className="text-lg font-semibold text-slate-900">{viewCount}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-md shadow-sm">
+                <i class="fa-solid fa-arrow-up w-6 h-6 text-slate-500 flex-none"></i>
+                <div className="flex-1">
+                  <div className="text-xs text-slate-500">Total Thread Karma</div>
+                  <div className="text-lg font-semibold text-slate-900">{threadKarma}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-md shadow-sm">
+                <i class="fa-solid fa-comment w-6 h-6 text-slate-500 flex-none"></i>
+                <div className="flex-1">
+                  <div className="text-xs text-slate-500">Total Comments</div>
+                  <div className="text-lg font-semibold text-slate-900">{thread.comment_count || 0}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-md shadow-sm">
+                <i class="fa-solid fa-arrow-up w-6 h-6 text-slate-500 flex-none"></i>
+                <div className="flex-1">
+                  <div className="text-xs text-slate-500">Total Comment Votes</div>
+                  <div className="text-lg font-semibold text-slate-900">{totalCommentVotes}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <br />
+          <div className="bg-white border border-slate-200 p-4 rounded-md md:h-[calc(100vh-4rem)] md:overflow-auto ">
+            <h2 className="text-lg font-bold mb-2 ">Comments</h2>
             <form onSubmit={submitComment} className="space-y-2">
               <textarea value={text} onChange={e => setText(e.target.value)} className="w-full border rounded-md p-2" rows={4} placeholder="Add a comment..." />
               <div>

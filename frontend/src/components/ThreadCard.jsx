@@ -52,9 +52,10 @@ export default function ThreadCard({ thread }) {
 
   const categorySlug = thread.category_slug || thread.categorySlug || (thread.category && thread.category.slug) || 'unknown';
     const author = thread.author || thread.username || 'anonymous';
-    const likes = thread.likes || 0;
-    const commentCount = thread.commentCount || thread.comment_count || 0;
-    const views = thread.views || 0;
+  const likes = thread.likes || 0;
+  const commentCount = thread.commentCount || thread.comment_count || 0;
+  // prefer the canonical DB column `view_count`, then camelCase `viewCount`, then legacy `views`
+  const views = (thread.view_count ?? thread.viewCount ?? thread.views) || 0;
 
   const [karma, setKarma] = React.useState(thread.karma || thread.karma_score || likes || 0);
   const [voted, setVoted] = React.useState(0); // 0 none, 1 up, -1 down
@@ -127,8 +128,8 @@ export default function ThreadCard({ thread }) {
             {renderBody(thread.body_text, thread.media)}
 
             <div className="mt-2 flex items-center gap-4 text-sm text-slate-600">
-              <span title="Comments">💬 {commentCount}</span>
-              <span title="Views">👁 {views}</span>
+              <span title="Comments"><i className="fa-solid fa-comment"></i> {commentCount}</span>
+              <span title="Views"><i className="fa-solid fa-eye"></i> {views}</span>
             </div>
           </div>
         </div>
