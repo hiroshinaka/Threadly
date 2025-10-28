@@ -20,6 +20,11 @@ export default function Header({
   const [localCategories, setLocalCategories] = useState(categories || []);
   const { user, loggedIn, logout } = useAuth();
 
+  // keep localCategories in sync when parent provides new categories
+  React.useEffect(() => {
+    setLocalCategories(categories || []);
+  }, [categories]);
+
   const defaultCreateCategory = async (payload) => {
     try {
       const res = await fetch('/api/categories', {
@@ -127,7 +132,12 @@ export default function Header({
             <div className="w-full md:max-w-xl">
               <div className="min-h-[44px] flex items-center">
                 <SearchBar
-                  onSearch={(q) => console.log("Search query:", q)}
+                  onSearch={(q) => {
+                    const trimmed = String(q || '').trim();
+                    if (!trimmed) return;
+                    // navigate to search results page on submit
+                    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+                  }}
                   className="w-full min-h-[44px]"
                 />
               </div>

@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Signup from './components/Signup';
 import Login from './components/Login';
@@ -8,32 +7,109 @@ import Header from './components/Header';
 import ThreadList from './components/ThreadList';
 import Profile from './components/Profile';
 import Footer from './components/Footer';
-import { categories, threads as seedThreads } from './data/mock';
+import ThreadView from './components/ThreadView';
+import SearchResults from './components/SearchResults';
+// We'll fetch categories and threads from the backend instead of using mock data
 
 
 function App() {
   const [activeTab, setActiveTab] = useState('new'); // 'new' | 'top' | 'hot'
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [threadsData, setThreadsData] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(8);
+
+  useEffect(() => {
+    // fetch categories and threads from backend
+    const load = async () => {
+      try {
+        const cRes = await fetch('/api/categories');
+        if (cRes.ok) {
+          const cBody = await cRes.json();
+          setCategories(cBody.categories || []);
+        }
+      } catch (err) {
+        console.error('Failed to load categories', err);
+      }
+
+      try {
+        const tRes = await fetch('/api/threads');
+        if (tRes.ok) {
+          const tBody = await tRes.json();
+          // threads router returns { ok:true, threads }
+          setThreadsData(tBody.threads || []);
+        }
+      } catch (err) {
+        console.error('Failed to load threads', err);
+      }
+    };
+    load();
+  }, []);
+
+  // reset visible count when sorting or category changes so the user sees the top of the new list
+  useEffect(() => {
+    setVisibleCount(8);
+  }, [activeTab, selectedCategory]);
+
+  // infinite scroll: when the user scrolls near the bottom, reveal more threads
+  useEffect(() => {
+    const onScroll = () => {
+      // compute the total number of threads after category filtering (same logic used when rendering)
+      const totalFiltered = threadsData.filter(t => {
+        if (!selectedCategory) return true;
+        const slug = t.categorySlug || t.category_slug || (t.category && t.category.slug);
+        const id = t.categoryId || t.category_id || t.categories_id;
+        const name = t.category && t.category.name;
+        return selectedCategory === slug || selectedCategory === String(id) || selectedCategory === name;
+      }).length;
+
+      // only try to load more if we still have hidden threads
+      if (visibleCount >= totalFiltered) return;
+
+      const scrolledToBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 120;
+      if (scrolledToBottom) {
+        setVisibleCount(prev => Math.min(prev + 8, totalFiltered));
+      }
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [visibleCount, threadsData, selectedCategory, activeTab]);
 
 
   const threads = useMemo(() => {
-  const now = Date.now();
-  const scored = seedThreads.map(t => {
-  const hours = Math.max(1, (now - new Date(t.createdAt).getTime()) / 36e5);
-  const hot = Math.log(1 + t.likes + t.commentCount) + (1 / hours); // simple, fast hot score
-  return { ...t, hotScore: hot };
-});
+    const now = Date.now();
+    const scored = threadsData.map(t => {
+      const createdAt = t.created_at || t.createdAt || new Date().toISOString();
+      const likes = t.likes || 0;
+      const commentCount = t.commentCount || t.comment_count || 0;
+      // hours since creation (used for estimations)
+      const hours = Math.max(1, (now - new Date(createdAt).getTime()) / 36e5);
 
+      // Determine likes in the last hour. Prefer an explicit field if backend provides it
+      // spreading total likes over hours and taking that per-hour rate as an estimate.
+      const likesLastHour = Number(t.likes_last_hour ?? t.recent_likes ?? Math.round((likes) / hours));
 
-if (activeTab === 'new') {
-  return scored.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-}
-if (activeTab === 'top') {
-  return scored.sort((a, b) => (b.likes + b.commentCount) - (a.likes + a.commentCount));
-}
-// hot
-  return scored.sort((a, b) => b.hotScore - a.hotScore);
-}, [activeTab]);
+      // hotScore for fallback/hybrid ranking (not used for final 'hot' sort when explicit data exists)
+      const hot = likesLastHour || Math.log(1 + likes + commentCount) + (1 / hours);
+      return { ...t, hotScore: hot, createdAt, likesLastHour };
+    });
+
+    if (activeTab === 'new') {
+      return scored.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    if (activeTab === 'top') {
+      // sort by total karma (server persistently tracks karma)
+      return scored.sort((a, b) => ( (b.karma || b.karma_score || 0) - (a.karma || a.karma_score || 0) ));
+    }
+    // controversial: sort by number of comments (threads with more discussion bubble up)
+    if (activeTab === 'controversial') {
+      return scored.sort((a, b) => ((b.commentCount || b.comment_count || 0) - (a.commentCount || a.comment_count || 0)));
+    }
+
+    // fallback: if unknown tab, return by created date
+    return scored.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [activeTab, threadsData]);
 
 
   return (
@@ -48,7 +124,6 @@ if (activeTab === 'top') {
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
-  <Route path="/profile" element={<Profile />} />
         <Route path="/" element={
           <main>
             <section className="section">
@@ -59,7 +134,7 @@ if (activeTab === 'top') {
               <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">
-                    {['new','top','hot'].map(key => {
+                    {['new','top','controversial'].map(key => {
                       const isActive = activeTab === key;
                       return (
                         <button
@@ -76,8 +151,14 @@ if (activeTab === 'top') {
               <div className="w-full px-4 sm:px-6 lg:px-8">
                 <ThreadList
                   threads={threads
-                    .filter(t => !selectedCategory || t.categorySlug === selectedCategory)
-                    .slice(0, 8)}
+                    .filter(t => {
+                      if (!selectedCategory) return true;
+                      const slug = t.categorySlug || t.category_slug || (t.category && t.category.slug);
+                      const id = t.categoryId || t.category_id || t.categories_id;
+                      const name = t.category && t.category.name;
+                      return selectedCategory === slug || selectedCategory === String(id) || selectedCategory === name;
+                    })
+                    .slice(0, visibleCount)}
                 />
               </div>
             </section>

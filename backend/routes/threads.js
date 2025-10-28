@@ -1,46 +1,35 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../database/connections/databaseConnection');
-
-// Helper to fetch comments for a thread and nest replies
-async function fetchComments(thread_id) {
-  const [rows] = await pool.query(
-    `SELECT c.comment_id, c.text, c.created_at, c.parent_id, c.author_id, u.username
-     FROM comment c
-     JOIN user u ON c.author_id = u.id
-     WHERE c.thread_id = ?
-     ORDER BY c.created_at ASC`,
-    [thread_id]
-  );
-
-  const byId = {};
-  rows.forEach(r => byId[r.comment_id] = { ...r, replies: [] });
-  const root = [];
-  rows.forEach(r => {
-    if (r.parent_id) {
-      const parent = byId[r.parent_id];
-      if (parent) parent.replies.push(byId[r.comment_id]);
-    } else {
-      root.push(byId[r.comment_id]);
-    }
-  });
-  return root;
-}
+const { voteThread } = require('../database/dbQueries/reactionQuery');
+const { fetchThreadFrontPage, fetchThreadById, fetchComments } = require('../database/dbQueries/threadQuery');
 
 // GET /threads - list recent threads 
 router.get('/', async (req, res) => {
   try {
-    const [threads] = await pool.query(
-      `SELECT t.thread_id, t.title, t.is_active, t.created_at, c.name, t.author_id, u.username as author, 
-       FROM thread t
-       JOIN user u ON t.author_id = u.id
-       JOIN category c ON t.category_id = c.id
-       JOIN view_events v on t.thread_id = v.thread_id
-       JOIN comments cm on t.thread_id = cm.thread_id
-       WHERE t.is_active = 1
-       ORDER BY t.created_at DESC
-       LIMIT 50`
-    );
+    const userId = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
+    const threads = await fetchThreadFrontPage(pool, 50);
+    // if user logged in, attach their vote for each thread so frontend can render vote state
+    if (userId && threads && threads.length) {
+      try {
+        const ids = threads.map(t => t.thread_id);
+        const placeholders = ids.map(() => '?').join(',');
+        // attempt to read numeric value column; fallback to presence-only
+        try {
+          const [vr] = await pool.query(`SELECT thread_id, value FROM thread_reaction WHERE user_id = ? AND thread_id IN (${placeholders})`, [userId, ...ids]);
+          const map = {};
+          vr.forEach(v => { map[v.thread_id] = Number(v.value) || 0; });
+          threads.forEach(t => { t.user_vote = map[t.thread_id] || 0; });
+        } catch (e) {
+          const [vr] = await pool.query(`SELECT thread_id FROM thread_reaction WHERE user_id = ? AND thread_id IN (${placeholders})`, [userId, ...ids]);
+          const map = {};
+          vr.forEach(v => { map[v.thread_id] = 1; });
+          threads.forEach(t => { t.user_vote = map[t.thread_id] || 0; });
+        }
+      } catch (e) {
+        // ignore mapping failures
+      }
+    }
     res.json({ ok: true, threads });
   } catch (err) {
     console.error(err);
@@ -52,16 +41,11 @@ router.get('/', async (req, res) => {
 router.get('/:thread_id', async (req, res) => {
   const { thread_id } = req.params;
   try {
-    const [rows] = await pool.query(
-      `SELECT t.thread_id, t.title, t.body, t.is_active, t.created_at, t.category_id, t.author_id, u.username as author
-       FROM thread t
-       JOIN user u ON t.author_id = u.id
-       WHERE t.thread_id = ?`,
-      [thread_id]
-    );
-    if (!rows.length) return res.status(404).json({ ok: false, message: 'Thread not found' });
+    const userId = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
+    const rows = await fetchThreadById(pool, thread_id, userId);
+    if (!rows || !rows.length) return res.status(404).json({ ok: false, message: 'Thread not found' });
     const thread = rows[0];
-    const comments = await fetchComments(thread_id);
+    const comments = await fetchComments(pool, thread_id, userId);
     res.json({ ok: true, thread, comments });
   } catch (err) {
     console.error(err);
@@ -72,8 +56,10 @@ router.get('/:thread_id', async (req, res) => {
 // POST /threads/:thread_id/comments - add a comment or reply
 router.post('/:thread_id/comments', async (req, res) => {
   const { thread_id } = req.params;
-  const { author_id, text, parent_id } = req.body;
-  if (!author_id || !text) return res.status(400).json({ ok: false, message: 'author_id and text required' });
+  const { text, parent_id } = req.body;
+  // prefer session user id if available
+  const author_id = (req.session && req.session.user && req.session.user.id) || req.body.author_id;
+  if (!author_id || !text) return res.status(400).json({ ok: false, message: 'Please log in or sign up first to comment' });
   try {
     // ensure thread exists
     const [trows] = await pool.query('SELECT thread_id FROM thread WHERE thread_id = ?', [thread_id]);
@@ -88,6 +74,43 @@ router.post('/:thread_id/comments', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: 'DB error' });
+  }
+});
+
+// POST /threads/:thread_id/vote - cast or remove a vote
+router.post('/:thread_id/vote', async (req, res) => {
+  try {
+    const { thread_id } = req.params;
+    const userId = req.session && req.session.user && req.session.user.id;
+    if (!userId) return res.status(401).json({ ok: false, message: 'Please log in or sign up first to vote' });
+    let { value } = req.body;
+    value = Number(value);
+    if (![1, -1, 0].includes(value)) return res.status(400).json({ ok: false, message: 'Invalid vote value' });
+
+    const result = await voteThread(pool, userId, Number(thread_id), value);
+    res.json({ ok: true, karma: result.karma, delta: result.delta });
+  } catch (err) {
+    console.error('Vote error', err);
+    res.status(500).json({ ok: false, message: 'Server error' });
+  }
+});
+
+// POST /comments/:comment_id/vote - cast or remove a vote on a comment
+router.post('/comments/:comment_id/vote', async (req, res) => {
+  try {
+    const { comment_id } = req.params;
+    const userId = req.session && req.session.user && req.session.user.id;
+    if (!userId) return res.status(401).json({ ok: false, message: 'Please log in or sign up first to vote' });
+    let { value } = req.body;
+    value = Number(value);
+    if (![1, -1, 0].includes(value)) return res.status(400).json({ ok: false, message: 'Invalid vote value' });
+
+    const { voteComment } = require('../database/dbQueries/reactionQuery');
+    const result = await voteComment(pool, userId, Number(comment_id), value);
+    res.json({ ok: true, karma: result.karma, delta: result.delta });
+  } catch (err) {
+    console.error('Comment vote error', err);
+    res.status(500).json({ ok: false, message: 'Server error' });
   }
 });
 

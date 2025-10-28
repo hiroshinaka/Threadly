@@ -2,11 +2,13 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../database/connections/databaseConnection');
 const multer = require('multer');
+const threadsRouter = require('./threads');
 const cloudinary = require('cloudinary').v2;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1024*1024 } });
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
-const { createThread } = require('../database/dbQueries/threadQuery');
+const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
+const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
 
 const bcrypt = require('bcryptjs');
 const joi = require('joi');
@@ -151,7 +153,90 @@ router.post('/categories', async (req, res) => {
 	}
 
 });
-//TODO: Implement thread creation
+// GET /categories - list categories
+router.get('/categories', async (req, res) => {
+	try {
+		const [rows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow, slug FROM categories ORDER BY name ASC');
+		res.json({ ok: true, categories: rows });
+	} catch (err) {
+		console.error('Error fetching categories', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+// GET /search?q=...&limit=20&offset=0
+router.get('/search', async (req, res) => {
+	try {
+		const q = (req.query.q || '').trim();
+		const limit = Math.min(100, parseInt(req.query.limit, 10) || 20);
+		const offset = parseInt(req.query.offset, 10) || 0;
+		if (!q) return res.status(400).json({ ok: false, message: 'q (query) is required' });
+
+		// Fulltext search works best for queries of length >= 3. For very short queries use LIKE fallback.
+		let rows = [];
+		if (q.length >= 3) {
+			const sql = `SELECT thread_id, title, slug, body_text, karma, created_at, category_id, MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+						 FROM thread
+						 WHERE MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE)
+						 ORDER BY score DESC
+						 LIMIT ? OFFSET ?`;
+			const [r] = await pool.query(sql, [q, q, limit, offset]);
+			rows = r;
+		}
+
+		if (rows.length === 0) {
+			const likeQ = `%${q}%`;
+			const sql2 = `SELECT thread_id, title, slug, body_text, karma, created_at, category_id
+													FROM thread
+													WHERE title LIKE ? OR body_text LIKE ?
+													ORDER BY created_at DESC
+													LIMIT ? OFFSET ?`;
+			const [r2] = await pool.query(sql2, [likeQ, likeQ, limit, offset]);
+			rows = r2;
+		}
+
+			// --- also search comments (returns comment matches separately) ---
+			let commentRows = [];
+			try {
+				if (q.length >= 3) {
+					const csql = `SELECT comment_id, text, u.username AS author_username, thread_id, author_id, created_at, MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+												FROM comment
+												JOIN user u ON
+												author_id = u.id
+												WHERE MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE)
+												ORDER BY score DESC
+												LIMIT ? OFFSET ?`;
+					const [cr] = await pool.query(csql, [q, q, limit, offset]);
+					commentRows = cr;
+				}
+				if (commentRows.length === 0) {
+					const likeQ = `%${q}%`;
+					const csql2 = `SELECT comment_id, u.username AS author_username, text, thread_id, author_id, created_at
+												 FROM comment
+												 JOIN user u ON
+												 author_id = u.id
+												 WHERE text LIKE ?
+												 ORDER BY created_at DESC
+												 LIMIT ? OFFSET ?`;
+					const [cr2] = await pool.query(csql2, [likeQ, limit, offset]);
+					commentRows = cr2;
+				}
+			} catch (e) {
+				console.error('Comment search failed', e);
+				// don't fail the entire search if comments can't be searched for any reason
+				commentRows = [];
+			}
+
+			res.json({ ok: true, query: q, thread_count: rows.length, threads: rows, comment_count: commentRows.length, comments: commentRows });
+	} catch (err) {
+		console.error('Search error', err);
+		res.status(500).json({ ok: false, message: 'Search failed' });
+	}
+});
+// Mount the threads router (provides GET /api/threads and thread detail endpoints)
+
+router.use('/threads', threadsRouter);
+
 router.post('/threads', upload.single('image'), async (req, res) => {
 	try {
 		const { title, text, category_id } = req.body;
@@ -168,11 +253,12 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 		}
 
 		// fetch category
-		const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ? OR slug = ?', [category_id, category_id]);
+	const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ?', [category_id]);
 		if (!catRows.length) return res.status(400).json({ ok: false, message: 'Invalid category' });
 		const category = catRows[0];
 
-		let bodyToSave = null;
+	let bodyToSave = null;
+	let uploadResult = null;
 
 		if (req.file) {
 			if (!category.photo_allow) {
@@ -180,19 +266,81 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 			}
 			// upload buffer to cloudinary
 			const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-			const uploadResult = await cloudinary.uploader.upload(dataUri, { folder: 'threadly' });
-			bodyToSave = JSON.stringify({ type: 'image', url: uploadResult.secure_url, width: uploadResult.width, height: uploadResult.height });
+			uploadResult = await cloudinary.uploader.upload(dataUri, {
+				folder: 'threadly',
+				resource_type: 'image',
+			});
+
+			// Store the original, full-size image URL so the thread view can display the full image.
+			let imageBody = { type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
+			if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) {
+				imageBody.text = text.trim();
+			}
+			bodyToSave = JSON.stringify(imageBody);
 		} else {
 			if (!category.text_allow) return res.status(400).json({ ok: false, message: 'This category does not allow text posts' });
 			if (!text || text.trim().length === 0) return res.status(400).json({ ok: false, message: 'Text body is required for text posts' });
 			bodyToSave = text.trim();
 		}
-		//Insert thread into database
-		const threadId = await createThread(pool, title.trim(), bodyToSave, author_id, category.categories_id);
-		res.status(201).json({ ok: true, thread_id: threadId });
+	// Determine searchable plain-text for body_text column (used by FULLTEXT search)
+	let bodyText = null;
+	try {
+		const parsed = JSON.parse(bodyToSave);
+		if (parsed && typeof parsed.text === 'string' && parsed.text.trim().length > 0) bodyText = parsed.text.trim();
+	} catch (e) {
+		// not JSON — treat bodyToSave as plain text
+		if (typeof bodyToSave === 'string' && bodyToSave.trim().length > 0) bodyText = bodyToSave.trim();
+	}
+
+	//Insert thread into database (pass body_text so it's searchable)
+		const created = await createThread(pool, title.trim(), author_id, category.categories_id, bodyText);
+		// if we uploaded an image, persist it to thread_media
+				if (req.file) {
+					try {
+						const media = { media_type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
+						if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) media.caption = text.trim();
+						await insertThreadMedia(pool, created.thread_id, media);
+					} catch (e) {
+						console.error('Failed to insert thread media', e);
+					}
+				}
+
+		// createThread returns { thread_id, slug }
+		res.status(201).json({ ok: true, thread_id: created.thread_id, slug: created.slug });
 	} catch (err) {
 		console.error('Error creating thread', err);
 		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+
+
+// POST /api/threads/:id/view
+router.post('/threads/:id/view', async (req, res) => {
+	try {
+		const threadId = Number(req.params.id);
+		if (!threadId) return res.status(400).json({ ok: false, message: 'Invalid thread id' });
+
+		// determine identifiers for dedupe
+		const viewer_id = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
+		const session_id = req.sessionID || (req.cookies && req.cookies['connect.sid']) || null;
+		const ipHash = hashIp(req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress);
+
+		// Decide whether to insert a raw event for auditing/dedupe
+		const should = await shouldRecordView(pool, { thread_id: threadId, viewer_id, session_id, ip_hash: ipHash, windowMinutes: 60 });
+
+		// Always increment the cached counter so the UI shows an updated total when the client signals a view.
+		const newCount = await incrementThreadViewCount(pool, threadId, 1);
+
+		let insertId = null;
+		if (should) {
+			insertId = await insertViewEvent(pool, { thread_id: threadId, viewer_id, session_id, ip_hash: ipHash });
+		}
+
+		res.json({ ok: true, recorded: should, inserted_id: insertId, view_count: newCount });
+	} catch (err) {
+		console.error('Error recording view', err);
+		res.status(500).json({ ok: false, message: 'Failed to record view' });
 	}
 });
 
