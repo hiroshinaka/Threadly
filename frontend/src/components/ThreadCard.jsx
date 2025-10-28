@@ -77,7 +77,7 @@ export default function ThreadCard({ thread }) {
     const delta = toSend === 0 ? -1 : (current === -1 ? 2 : 1);
     setKarma(k => k + delta);
     setVoted(toSend === 0 ? 0 : 1);
-    fetch(`/api/threads/${thread.thread_id}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) })
+    fetch(`/api/threads/${thread.thread_id}/vote`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) })
       .then(r => r.json())
       .then(b => { if (b && typeof b.karma === 'number') setKarma(b.karma); })
       .catch(()=>{});
@@ -90,7 +90,7 @@ export default function ThreadCard({ thread }) {
     const delta = toSend === 0 ? 1 : (current === 1 ? -2 : -1);
     setKarma(k => k + delta);
     setVoted(toSend === 0 ? 0 : -1);
-    fetch(`/api/threads/${thread.thread_id}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) })
+    fetch(`/api/threads/${thread.thread_id}/vote`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) })
       .then(r => r.json())
       .then(b => { if (b && typeof b.karma === 'number') setKarma(b.karma); })
       .catch(()=>{});

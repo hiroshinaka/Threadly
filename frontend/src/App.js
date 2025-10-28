@@ -25,8 +25,17 @@ function App() {
       try {
         const cRes = await fetch('/api/categories');
         if (cRes.ok) {
-          const cBody = await cRes.json();
-          setCategories(cBody.categories || []);
+          const ct = cRes.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const cBody = await cRes.json();
+            setCategories(cBody.categories || []);
+          } else {
+            const txt = await cRes.text();
+            console.error('Expected JSON for /api/categories but got:', txt.slice(0, 400));
+          }
+        } else {
+          const txt = await cRes.text().catch(() => null);
+          console.error('Failed to fetch /api/categories', cRes.status, txt);
         }
       } catch (err) {
         console.error('Failed to load categories', err);
@@ -35,9 +44,20 @@ function App() {
       try {
         const tRes = await fetch('/api/threads');
         if (tRes.ok) {
-          const tBody = await tRes.json();
-          // threads router returns { ok:true, threads }
-          setThreadsData(tBody.threads || []);
+          const ct = tRes.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const tBody = await tRes.json();
+            // threads router returns { ok:true, threads }
+            setThreadsData(tBody.threads || []);
+          } else {
+            const txt = await tRes.text();
+            console.error('Expected JSON for /api/threads but got:', txt.slice(0, 800));
+            setThreadsData([]);
+          }
+        } else {
+          const txt = await tRes.text().catch(() => null);
+          console.error('Failed to fetch /api/threads', tRes.status, txt);
+          setThreadsData([]);
         }
       } catch (err) {
         console.error('Failed to load threads', err);

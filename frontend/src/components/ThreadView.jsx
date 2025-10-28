@@ -202,7 +202,7 @@ export default function ThreadView() {
     e.preventDefault();
     if (!text.trim()) return;
     try {
-      const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+  const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       if (!res.ok) {
         // prefer structured JSON message if present, otherwise fall back to text
         let msg = 'Failed to post comment';
@@ -236,7 +236,7 @@ export default function ThreadView() {
   const submitReply = async (parentId) => {
     if (!replyText.trim()) return;
     try {
-      const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: replyText, parent_id: parentId }) });
+  const res = await fetch(`/api/threads/${thread.thread_id}/comments`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: replyText, parent_id: parentId }) });
       if (!res.ok) {
         let msg = 'Failed to post reply';
         try {
@@ -277,7 +277,7 @@ export default function ThreadView() {
     setCommentVotes(prev => ({ ...prev, [commentId]: toSend }));
 
     try {
-      const res = await fetch(`/api/threads/comments/${commentId}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) });
+  const res = await fetch(`/api/threads/comments/${commentId}/vote`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: toSend }) });
       if (!res.ok) {
         // prefer structured JSON message if present, otherwise fall back to text
         let msg = 'Vote failed';
