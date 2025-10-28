@@ -114,7 +114,7 @@ function App() {
 
   return (
   <Router>
-    <AuthProvider>
+    {/* <AuthProvider> */}
       <div className="app">
         <Header
           categories={categories}
@@ -167,7 +167,7 @@ function App() {
       </Routes>
         <Footer />
       </div>
-    </AuthProvider>
+    {/* </AuthProvider> */}
   </Router>
 );
 }

@@ -43,8 +43,10 @@ export default function Profile() {
       </div>
     );
   }
+  
+  /*Uncomment this section*/
 
-  const myPosts = seedThreads.filter(t => t.author === (user?.username || ''));
+  //const myPosts = seedThreads.filter(t => t.author === (user?.username || ''));
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -88,12 +90,14 @@ export default function Profile() {
             <div className="mt-4 flex gap-4 items-center">
               <div>
                 <div className="text-sm text-slate-500">Karma</div>
-                <div className="font-medium">{myPosts.reduce((s, p) => s + (p.likes || 0), 0)}</div>
+                {/*Uncomment this section*/} 
+
+                {/* <div className="font-medium">{myPosts.reduce((s, p) => s + (p.likes || 0), 0)}</div> */}
               </div>
               <button onClick={() => setShowContribModal(true)}>
                 <div className="text-sm text-slate-500">Contributions</div>
                 <div className="font-medium text-left text-slate-900">
-                  {myPosts.length}
+                  {/* {myPosts.length} */} 
                 </div>
               </button>
             </div>
@@ -118,13 +122,15 @@ export default function Profile() {
             </button>
           </div>
 
-          <div className="mt-4 space-y-4">
+          {/*Uncomment this section*/} 
+
+          {/* <div className="mt-4 space-y-4">
             {tab === 'posts' && (
               <>
                 {myPosts.length === 0 ? (
                   <div className="p-4 bg-white rounded shadow text-slate-600">No posts yet.</div>
                 ) : (
-                  myPosts.map(post => (
+                  {myPosts.map(post => (
                     <article key={post.id} className="p-4 bg-white rounded shadow">
                       <h3 className="text-base font-semibold text-slate-900">{post.title}</h3>
                       <div className="text-sm text-slate-500 mt-1">{post.categorySlug} • {new Date(post.createdAt).toLocaleString()}</div>
@@ -138,7 +144,8 @@ export default function Profile() {
             {tab === 'comments' && (
               <div className="p-4 bg-white rounded shadow text-slate-600">No comments yet.</div>
             )}
-          </div>
+          </div> */}
+          
         </section>
 
         {/* Contributions modal */}
@@ -170,10 +177,11 @@ export default function Profile() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="text-center">
+                  {/*Uncomment this section*/} 
+                  {/* <div className="text-center">
                     <div className="text-xs text-slate-400">Posts</div>
                     <div className="text-2xl font-semibold">{myPosts.length}</div>
-                  </div>
+                  </div> */}
                   <div className="text-center">
                     <div className="text-xs text-slate-400">Comments</div>
                     <div className="text-2xl font-semibold">0</div>
