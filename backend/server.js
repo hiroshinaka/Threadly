@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const mongoStore = require('./database/connections/mongoStoreConnection');
-
+const cors = require('cors');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 5000;
