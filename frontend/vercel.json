@@ -1,5 +1,5 @@
 {
     "rewrites":[
-        { "source": "/api/:path*", "destination": "https://threadly-yxv0.onrender.com/api/:path*" }
+        { "source": "/api/:path*", "destination": "https://threadly-1-08lt.onrender.com/api/:path*" }
     ]
 }
