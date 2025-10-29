@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../database/connections/databaseConnection');
 const { voteThread } = require('../database/dbQueries/reactionQuery');
 const { fetchThreadFrontPage, fetchThreadById, fetchComments } = require('../database/dbQueries/threadQuery');
+const { deleteCommentAndReplies } = require('../database/dbQueries/commentQuery');
 
 // GET /threads - list recent threads 
 router.get('/', async (req, res) => {
@@ -110,6 +111,33 @@ router.post('/comments/:comment_id/vote', async (req, res) => {
     res.json({ ok: true, karma: result.karma, delta: result.delta });
   } catch (err) {
     console.error('Comment vote error', err);
+    res.status(500).json({ ok: false, message: 'Server error' });
+  }
+});
+
+// DELETE /comments/:comment_id - soft-delete a comment (replace text with [REMOVED]) and keep replies
+router.delete('/comments/:comment_id', async (req, res) => {
+  try {
+    const { comment_id } = req.params;
+    const userId = req.session && req.session.user && req.session.user.id;
+    if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete comments' });
+
+    // ensure the comment exists and is owned by the current user (authors may delete their own comments)
+    const [rows] = await pool.query('SELECT comment_id, author_id FROM comment WHERE comment_id = ?', [comment_id]);
+    if (!rows.length) return res.status(404).json({ ok: false, message: 'Comment not found' });
+    const row = rows[0];
+  // Allow deletion if the requester is the author or an admin (role_id === 1)
+  const requesterRole = req.session && req.session.user && req.session.user.role_id ? Number(req.session.user.role_id) : null;
+  const isAuthor = Number(row.author_id) === Number(userId);
+  const isAdmin = requesterRole === 1;
+  if (!isAuthor && !isAdmin) return res.status(403).json({ ok: false, message: 'Not authorized to delete this comment' });
+
+    // Soft-delete: replace text with marker and reset karma to 0
+    await pool.query('UPDATE comment SET text = ?, karma = 0 WHERE comment_id = ?', ['[REMOVED]', comment_id]);
+
+    res.json({ ok: true, comment_id: Number(comment_id) });
+  } catch (err) {
+    console.error('Delete comment error', err);
     res.status(500).json({ ok: false, message: 'Server error' });
   }
 });

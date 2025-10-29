@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import useAuth from '../hooks/useAuth';
 import { useParams } from 'react-router-dom';
 
 function renderBody(body_text, mediaArray) {
@@ -39,7 +40,7 @@ function renderBody(body_text, mediaArray) {
 }
 
 // Stable recursive comment renderer (defined outside the main component so its identity doesn't change between renders)
-function CommentNode({ comment, replyingTo, setReplyingTo, replyText, setReplyText, submitReply, voteComment, commentVotes }) {
+function CommentNode({ comment, replyingTo, setReplyingTo, deleteComment, replyText, setReplyText, submitReply, voteComment, commentVotes, currentUser }) {
   return (
     <li key={comment.comment_id} className="border rounded-md p-3 bg-white">
       <div className="flex items-center justify-between">
@@ -53,6 +54,9 @@ function CommentNode({ comment, replyingTo, setReplyingTo, replyText, setReplyTe
       <div className="mt-2">{comment.text}</div>
       <div className="mt-2 text-sm">
         <button onClick={() => setReplyingTo(replyingTo === comment.comment_id ? null : comment.comment_id)} className="text-slate-600 hover:text-slate-900">Reply</button>
+        {currentUser && (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(comment.author_id)) && (
+          <button onClick={() => deleteComment(comment.comment_id)} className="ml-4 text-slate-600 hover:text-slate-900">Delete</button>
+        )}
       </div>
 
         {replyingTo === comment.comment_id && (
@@ -68,7 +72,7 @@ function CommentNode({ comment, replyingTo, setReplyingTo, replyText, setReplyTe
       {comment.replies && comment.replies.length > 0 && (
         <ul className="mt-3 ml-4 space-y-2">
           {comment.replies.map(r => (
-            <CommentNode key={r.comment_id} comment={r} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} />
+            <CommentNode key={r.comment_id} comment={r} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} />
           ))}
         </ul>
       )}
@@ -88,6 +92,7 @@ export default function ThreadView() {
   const [replyingTo, setReplyingTo] = useState(null); // comment_id being replied to
   const [replyText, setReplyText] = useState('');
   const [commentVotes, setCommentVotes] = useState({}); // comment_id -> 1|-1|0
+  const { user: currentUser } = useAuth();
   // removed IntersectionObserver fallback — view POST is sent immediately on load
 
   // helper: flatten nested comments into a single array (includes replies)
@@ -308,6 +313,36 @@ export default function ThreadView() {
     }
   };
 
+  const deleteComment = async (commentId) => {
+  if (!window.confirm('Delete this comment and its replies? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/threads/comments/${commentId}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) {
+        let msg = 'Delete failed';
+        try {
+          const ct = res.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const j = await res.json();
+            msg = (j && (j.message || j.msg || j.error)) ? (j.message || j.msg || j.error) : JSON.stringify(j);
+          } else {
+            const t = await res.text();
+            msg = t || msg;
+          }
+        } catch (e) {
+          const t = await res.text().catch(() => null);
+          if (t) msg = t;
+        }
+        throw new Error(msg);
+      }
+      // refresh comments after delete
+      const refresh = await fetch(`/api/threads/${thread.thread_id}`);
+      const body = await refresh.json();
+      setComments(body.comments || []);
+    } catch (err) {
+      setError(err.message || 'Unable to delete comment');
+    }
+  };
+
   // compute derived stats (include nested replies)
   const totalCommentVotes = flattenComments(comments).reduce((s, c) => s + (Number(c.karma) || 0), 0);
   const viewCount = thread ? (thread.view_count ?? thread.viewCount ?? thread.views ?? 0) : 0;
@@ -377,7 +412,7 @@ export default function ThreadView() {
 
             <ul className="mt-4 space-y-3 max-h-[60vh] overflow-auto">
               {comments.map(c => (
-                <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} />
+                <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} />
               ))}
             </ul>
           </div>
