@@ -9,11 +9,11 @@ const mongoStore = require('./database/connections/mongoStoreConnection');
 const PORT = process.env.PORT || 5000;
 const app = express();
 
-// ---- CORS: do NOT use "*" with credentials:true
+// CORS setup
 const allowlist = [
   process.env.FRONTEND_ORIGIN,  
-  'https://threadly-phi.vercel.app',     // e.g. https://your-frontend.vercel.app
-  'http://localhost:5173',
+  'https://threadly-phi.vercel.app',     
+  'http://127.0.0.1:5000',
   'http://localhost:3000'
 ].filter(Boolean);
 
