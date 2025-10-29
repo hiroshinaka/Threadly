@@ -359,10 +359,8 @@ export default function ThreadView() {
           <h1 className="text-2xl font-semibold mb-2">{thread.title}</h1>
           <div className="text-sm text-slate-500 mb-4">by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time></div>
           <div className="prose max-w-full">{renderBody(thread.body_text, thread.media)}</div>
-        </article>
-
-        <aside className="mt-4 md:mt-0 md:w-1/2">
-        <div>
+          <br/>
+          <div>
           <div className="bg-white border border-slate-200 p-4 rounded-md md:overflow-auto">
             <h2 className="text-lg font-bold mb-3">Thread stats</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-700">
@@ -400,11 +398,14 @@ export default function ThreadView() {
             </div>
           </div>
         </div>
-        <br />
-          <div className="bg-white border border-slate-200 p-4 rounded-md md:h-[calc(100vh-4rem)] md:overflow-auto ">
+        </article>
+
+
+        <aside className="mt-4 md:mt-0 md:w-1/2">
+           <div className="bg-white border border-slate-200 p-4 rounded-md md:h-[calc(100vh-4rem)] md:overflow-auto ">
             <h2 className="text-lg font-bold mb-2 ">Comments</h2>
             <form onSubmit={submitComment} className="space-y-2">
-              <textarea value={text} onChange={e => setText(e.target.value)} className="w-full border rounded-md p-2" rows={4} placeholder="Add a comment..." />
+              <textarea value={text} onChange={e => setText(e.target.value)} className="w-full h-10 border rounded-md p-2" rows={4} placeholder="Add a comment..." />
               <div>
                 <button className="px-4 py-2 bg-slate-900 text-white rounded-md">Post comment</button>
               </div>
