@@ -52,7 +52,7 @@ export default function Profile() {
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    // Optimistic preview (optional)
+
     const reader = new FileReader();
     reader.onload = () => setUserAvatar(reader.result);
     reader.readAsDataURL(file);
@@ -69,7 +69,6 @@ export default function Profile() {
         });
         const body = await res.json();
         if (body && body.ok && body.user) {
-          // refresh auth so AuthContext.user gets updated
           if (typeof refresh === 'function') await refresh();
           setUserAvatar(body.user.image_url || defaultAvatar);
         } else {
@@ -100,7 +99,6 @@ export default function Profile() {
     );
   }
   
-  /*Uncomment this section*/
   const myPosts = posts;
 
   return (
