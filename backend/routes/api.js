@@ -9,6 +9,7 @@ const { createCategory, searchCategoriesByName } = require('../database/dbQuerie
 const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
 const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
+const { fetchUserPosts, fetchUserComments, fetchUserContribCounts } = require('../database/dbQueries/profileQuery');
 
 const bcrypt = require('bcryptjs');
 const joi = require('joi');
@@ -115,6 +116,23 @@ router.get('/me', (req, res) => {
 		return res.json({ ok: true, user: req.session.user });
 	}
 	return res.json({ ok: false });
+});
+
+// GET /api/profile/me - returns posts and comments for the logged-in user
+router.get('/profile/me', async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || !req.session.user.id) {
+			return res.status(401).json({ ok: false, message: 'Unauthorized' });
+		}
+		const userId = req.session.user.id;
+		const posts = await fetchUserPosts(pool, userId, 500);
+		const comments = await fetchUserComments(pool, userId, 500);
+		const counts = await fetchUserContribCounts(pool, userId);
+		res.json({ ok: true, posts, comments, counts });
+	} catch (err) {
+		console.error('Error fetching profile data', err);
+		res.status(500).json({ ok: false, message: 'Failed to fetch profile data' });
+	}
 });
 
 router.post('/logout', (req, res) => {
