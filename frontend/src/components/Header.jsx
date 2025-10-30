@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
+import Sidebar from './Sidebar';
 import CategoryModal from './CategoryModal';
 import ThreadModal from './ThreadModal';
 import logo from "../images/spool-of-thread.png";
@@ -430,6 +431,7 @@ export default function Header({
         </div>
       )}
     </header>
+      <Sidebar />
       <CategoryModal
         isOpen={showCategoryModal}
         onClose={() => setShowCategoryModal(false)}
