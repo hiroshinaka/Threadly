@@ -1,10 +1,3 @@
-/**
- * Profile related queries
- * - fetchUserPosts(pool, userId)
- * - fetchUserComments(pool, userId)
- * - fetchUserContribCounts(pool, userId)
- */
-
 let fetchUserPosts = async (pool, userId, limit = 200) => {
 	const [rows] = await pool.query(
 		`SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.view_count,

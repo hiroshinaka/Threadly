@@ -4,7 +4,7 @@ import ThreadCard from './ThreadCard';
 import Comment from './Comment';
 
 export default function Profile() {
-  const { user, loggedIn } = useAuth();
+  const { user, loggedIn, refresh } = useAuth();
   const [tab, setTab] = useState('posts'); // 'posts' | 'comments'
   const [showContribModal, setShowContribModal] = useState(false);
 
@@ -16,10 +16,10 @@ export default function Profile() {
 
   const fileInputRef = useRef(null);
   const defaultAvatar = 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop';
-  const [userAvatar, setUserAvatar] = useState(user?.avatar || defaultAvatar);
+  const [userAvatar, setUserAvatar] = useState(user?.image_url || defaultAvatar);
 
   useEffect(() => {
-    setUserAvatar(user?.avatar || defaultAvatar);
+    setUserAvatar(user?.image_url || defaultAvatar);
   }, [user]);
 
   // fetch profile data for logged-in user
@@ -52,12 +52,33 @@ export default function Profile() {
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    // Optimistic preview (optional)
     const reader = new FileReader();
-    reader.onload = () => {
-      setUserAvatar(reader.result);
-      // TODO: upload the file to the backend to persist the avatar.
-    };
+    reader.onload = () => setUserAvatar(reader.result);
     reader.readAsDataURL(file);
+
+    // upload to backend
+    const form = new FormData();
+    form.append('avatar', file);
+    (async () => {
+      try {
+        const res = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          credentials: 'include',
+          body: form,
+        });
+        const body = await res.json();
+        if (body && body.ok && body.user) {
+          // refresh auth so AuthContext.user gets updated
+          if (typeof refresh === 'function') await refresh();
+          setUserAvatar(body.user.image_url || defaultAvatar);
+        } else {
+          console.error('Avatar upload failed', body);
+        }
+      } catch (err) {
+        console.error('Avatar upload error', err);
+      }
+    })();
   };
 
   useEffect(() => {
