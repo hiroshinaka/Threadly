@@ -149,12 +149,12 @@ function App() {
         <Route path="/t/:slug/:id" element={<ThreadView />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
-          <main>
+          <main className="bg-gray-50">
             <section className="section">
               <div className="container">
               </div>
             </section>
-            <section className="section alt bg-gray-50 py-6">
+            <section className="section alt py-6 max-w-7xl mx-auto">
               <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">

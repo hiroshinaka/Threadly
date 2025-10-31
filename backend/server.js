@@ -30,14 +30,15 @@ app.use(express.json());
 
 // ---- Sessions (cross-site cookie for Vercel -> Render)
 app.set('trust proxy', 1);
+const isProd = process.env.NODE_ENV === 'production';
 const sessionOptions = {
   secret: process.env.NODE_SESSION_SECRET || 'defaultsecret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    sameSite: 'none',
-    secure: true,
-    maxAge: 24 * 60 * 60 * 1000
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd, 
+    maxAge: 24 * 60 * 60 * 1000,
   }
 };
 if (mongoStore) sessionOptions.store = mongoStore;
