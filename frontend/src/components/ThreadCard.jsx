@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 function renderImage(mediaArray) {
   if (!mediaArray) return null;
@@ -111,7 +112,7 @@ export default function ThreadCard({ thread }) {
         </button>
       </div>
 
-      <a href={threadHref} target="_blank" rel="noopener noreferrer" className="flex-1">
+  <Link to={threadHref} className="flex-1">
         <div className="flex items-start gap-3">
           {renderImage(thread.media)}
 
@@ -133,7 +134,7 @@ export default function ThreadCard({ thread }) {
             </div>
           </div>
         </div>
-      </a>
+  </Link>
     </article>
   );
 }

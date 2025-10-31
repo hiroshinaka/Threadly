@@ -64,8 +64,9 @@ let fetchThreadFrontPage = async (pool, limit = 50) => {
 
 let fetchThreadById = async (pool, thread_id, userId = null) => {
     const [rows] = await pool.query(
-        `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.author_id, t.view_count, u.username as author
+        `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.author_id, t.view_count,c.name AS category_name, c.slug AS category_slug, t.author_id, u.username as author
          FROM thread t
+         LEFT JOIN categories c ON t.category_id = c.categories_id
          JOIN user u ON t.author_id = u.id
          WHERE t.thread_id = ?`,
         [thread_id]

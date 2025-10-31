@@ -8,6 +8,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
 const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword, updateUserImage } = require('../database/dbQueries/userQuery');
+const { fetchUserPosts, fetchUserComments, fetchUserContribCounts } = require('../database/dbQueries/profileQuery');
 const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
 const { addSubscription, removeSubscription, listSubscriptionsForUser } = require('../database/dbQueries/subscriptionQuery');
 
@@ -222,7 +223,7 @@ router.post('/categories', async (req, res) => {
 // GET /categories - list categories
 router.get('/categories', async (req, res) => {
 	try {
-		const [rows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow, slug FROM categories ORDER BY name ASC');
+		const [rows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow, slug, description FROM categories ORDER BY name ASC');
 		res.json({ ok: true, categories: rows });
 	} catch (err) {
 		console.error('Error fetching categories', err);

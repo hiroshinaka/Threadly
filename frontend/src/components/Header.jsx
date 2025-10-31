@@ -28,9 +28,7 @@ export default function Header({
     setLocalCategories(categories || []);
   }, [categories]);
 
-  // build the list of categories the current user is subscribed to
-  const subscribedCategoryIds = new Set((subscriptions || []).map(s => Number(s.category_id || s.categoryId)).filter(n => !Number.isNaN(n)));
-  const displayCategories = localCategories.filter(c => subscribedCategoryIds.size === 0 ? false : subscribedCategoryIds.has(Number(c.categories_id || c.category_id)));
+  // Note: category dropdown removed — categories are managed via the Categories page
 
   const defaultCreateCategory = async (payload) => {
     try {
@@ -100,28 +98,6 @@ export default function Header({
               <img src={logo} alt="Site logo" className="w-7 h-7" />
               <span>Threadly</span>
             </a>
-
-            <nav className="flex items-center gap-3 ml-4 text-base">
-              <label htmlFor="category-select" className="sr-only">
-                Select category
-              </label>
-              <select
-                id="category-select"
-                className="bg-transparent text-slate-800 border-none rounded-md px-3 py-2 text-base font-medium focus:outline-none"
-                value={selectedCategory || ""}
-                onChange={(e) =>
-                  onCategoryChange && onCategoryChange(e.target.value || null)
-                }
-              >
-                <option value="">All Categories</option>
-                {displayCategories.map((cat) => (
-                  <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </nav>
-            {/* Desktop new-thread/new-category moved into the Sidebar */}
           </div>
 
           {/* CENTER (search bar) */}
@@ -342,29 +318,13 @@ export default function Header({
               </button>
 
               <div className="space-y-1">
-                <label
-                  htmlFor="m-category-select"
-                  className="text-base text-slate-600"
+                <button
+                  type="button"
+                  className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
+                  onClick={() => { navigate('/subreddits'); setOpen(false); }}
                 >
-                  Category
-                </label>
-                <select
-                  id="m-category-select"
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-base"
-                  value={selectedCategory || ""}
-                  onChange={(e) => {
-                    onCategoryChange &&
-                      onCategoryChange(e.target.value || null);
-                    setOpen(false);
-                  }}
-                >
-                  <option value="">All Categories</option>
-                  {displayCategories.map((cat) => (
-                    <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  Categories
+                </button>
               </div>
 
               {/* Mobile Buttons */}
