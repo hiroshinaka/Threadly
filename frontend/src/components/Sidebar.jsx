@@ -188,7 +188,7 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
               <>
                 <li>
                   <a href="/signup" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    📝 Sign Up
+                    <i class="fa-solid fa-pen"></i> Sign Up
                   </a>
                 </li>
                 <li>
