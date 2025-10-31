@@ -40,8 +40,32 @@ function renderBody(body_text, mediaArray) {
   );
 }
 
+function renderCommentText(text) {
+  if (!text && text !== '') return null;
+  // if text is a JSON-encoded removal marker, render a nicer placeholder
+  if (typeof text === 'string') {
+    const trimmed = text.trim();
+    if (trimmed === '[REMOVED BY USER]') {
+      return <div className="mt-2 italic text-sm text-slate-500">Comment removed</div>;
+    }
+    if (trimmed.startsWith('{') || trimmed.startsWith('"{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && parsed.removed) {
+          const reason = parsed.reason || parsed.removal_reason || parsed.removed_reason || null;
+          if (reason) return <div className="mt-2 italic text-sm text-slate-500">Comment removed: <span className="text-slate-400">{reason}</span></div>;
+          return <div className="mt-2 italic text-sm text-slate-500">Comment removed</div>;
+        }
+      } catch (e) {
+        // fallthrough to render raw text
+      }
+    }
+  }
+  return <div className="mt-2">{text}</div>;
+}
+
 // Stable recursive comment renderer (defined outside the main component so its identity doesn't change between renders)
-function CommentNode({ comment, replyingTo, setReplyingTo, deleteComment, replyText, setReplyText, submitReply, voteComment, commentVotes, currentUser }) {
+function CommentNode({ comment, replyingTo, setReplyingTo, deleteComment, replyText, setReplyText, submitReply, voteComment, commentVotes, currentUser, threadAuthorId }) {
   return (
     <li key={comment.comment_id} className="border rounded-md p-3 bg-white">
       <div className="flex items-center justify-between">
@@ -52,10 +76,10 @@ function CommentNode({ comment, replyingTo, setReplyingTo, deleteComment, replyT
           <button onClick={() => voteComment(comment.comment_id, -1)} className={`text-slate-500 hover:text-rose-600 ${commentVotes && commentVotes[comment.comment_id] === -1 ? 'text-rose-600 font-bold' : ''}`}>▼</button>
         </div>
       </div>
-      <div className="mt-2">{comment.text}</div>
+  {renderCommentText(comment.text)}
       <div className="mt-2 text-sm">
         <button onClick={() => setReplyingTo(replyingTo === comment.comment_id ? null : comment.comment_id)} className="text-slate-600 hover:text-slate-900">Reply</button>
-        {currentUser && (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(comment.author_id)) && (
+        {currentUser && (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(comment.author_id) || Number(currentUser.id) === Number(threadAuthorId)) && (
           <button onClick={() => deleteComment(comment.comment_id)} className="ml-4 text-slate-600 hover:text-slate-900">Delete</button>
         )}
       </div>
@@ -73,7 +97,7 @@ function CommentNode({ comment, replyingTo, setReplyingTo, deleteComment, replyT
       {comment.replies && comment.replies.length > 0 && (
         <ul className="mt-3 ml-4 space-y-2">
           {comment.replies.map(r => (
-            <CommentNode key={r.comment_id} comment={r} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} />
+            <CommentNode key={r.comment_id} comment={r} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} threadAuthorId={threadAuthorId} />
           ))}
         </ul>
       )}
@@ -405,7 +429,9 @@ export default function ThreadView() {
   };
 
   const deleteComment = async (commentId) => {
-  if (!window.confirm('Delete this comment and its replies? This cannot be undone.')) return;
+    // ask for confirmation first
+    const ok = window.confirm('Remove this comment? This cannot be undone.');
+    if (!ok) return;
     try {
       const res = await fetch(`/api/threads/comments/${commentId}`, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) {
@@ -449,6 +475,35 @@ export default function ThreadView() {
       <article className="bg-white border border-slate-200 p-6 rounded-md md:w-1/2">
           <div className="flex items-center gap-3 mb-2">
             <h1 className="text-2xl font-semibold">{thread.title}</h1>
+            {/* Delete thread button - visible to thread author or admins */}
+            {currentUser && (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(thread.author_id)) && (
+              <button onClick={async () => {
+                const ok = window.confirm('Delete this thread and all related comments, replies, media, and votes? This cannot be undone.');
+                if (!ok) return;
+                try {
+                  const res = await fetch(`/api/threads/${thread.thread_id}`, { method: 'DELETE', credentials: 'include' });
+                  if (!res.ok) {
+                    let msg = 'Failed to delete thread';
+                    try {
+                      const ct = res.headers.get('content-type') || '';
+                      if (ct.includes('application/json')) {
+                        const j = await res.json();
+                        msg = (j && (j.message || j.msg || j.error)) ? (j.message || j.msg || j.error) : JSON.stringify(j);
+                      } else {
+                        const t = await res.text();
+                        msg = t || msg;
+                      }
+                    } catch (e) { }
+                    throw new Error(msg);
+                  }
+                  // navigate back to category or home
+                  const catSlug = thread.category_slug || thread.category_name || 't';
+                  navigate(`/t/${catSlug}`);
+                } catch (err) {
+                  setError(err.message || 'Unable to delete thread');
+                }
+              }} className="ml-2 px-2 py-1 text-xs rounded bg-rose-50 text-rose-700 border border-rose-100">Delete Thread</button>
+            )}
           </div>
           <div className="text-sm text-slate-500 mb-4">
             by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time> •
@@ -512,7 +567,7 @@ export default function ThreadView() {
 
             <ul className="mt-4 space-y-3 max-h-[60vh] overflow-auto">
               {comments.map(c => (
-                <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} />
+                <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} threadAuthorId={thread && (thread.author_id || thread.authorId)} />
               ))}
             </ul>
           </div>
