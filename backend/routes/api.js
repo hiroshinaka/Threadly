@@ -9,6 +9,7 @@ const { createCategory, searchCategoriesByName } = require('../database/dbQuerie
 const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
 const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
+const { addSubscription, removeSubscription, listSubscriptionsForUser } = require('../database/dbQueries/subscriptionQuery');
 
 const bcrypt = require('bcryptjs');
 const joi = require('joi');
@@ -161,6 +162,49 @@ router.get('/categories', async (req, res) => {
 	} catch (err) {
 		console.error('Error fetching categories', err);
 		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+// POST /categories/:id/subscribe - subscribe logged-in user to a category
+router.post('/categories/:id/subscribe', async (req, res) => {
+	try {
+		const userId = req.session && req.session.user && req.session.user.id;
+		if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to subscribe' });
+		const categoryId = Number(req.params.id);
+		if (!categoryId) return res.status(400).json({ ok: false, message: 'Invalid category id' });
+		const ok = await addSubscription(pool, userId, categoryId);
+		res.json({ ok: true, subscribed: ok });
+	} catch (err) {
+		console.error('Subscribe error', err);
+		res.status(500).json({ ok: false, message: 'DB error' });
+	}
+});
+
+// DELETE /categories/:id/subscribe - unsubscribe logged-in user from a category
+router.delete('/categories/:id/subscribe', async (req, res) => {
+	try {
+		const userId = req.session && req.session.user && req.session.user.id;
+		if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to unsubscribe' });
+		const categoryId = Number(req.params.id);
+		if (!categoryId) return res.status(400).json({ ok: false, message: 'Invalid category id' });
+		const ok = await removeSubscription(pool, userId, categoryId);
+		res.json({ ok: true, unsubscribed: ok });
+	} catch (err) {
+		console.error('Unsubscribe error', err);
+		res.status(500).json({ ok: false, message: 'DB error' });
+	}
+});
+
+// GET /me/subscriptions - list the current user's subscriptions
+router.get('/me/subscriptions', async (req, res) => {
+	try {
+		const userId = req.session && req.session.user && req.session.user.id;
+		if (!userId) return res.status(401).json({ ok: false, message: 'Not logged in' });
+		const subs = await listSubscriptionsForUser(pool, userId);
+		res.json({ ok: true, subscriptions: subs });
+	} catch (err) {
+		console.error('List subs error', err);
+		res.status(500).json({ ok: false, message: 'DB error' });
 	}
 });
 

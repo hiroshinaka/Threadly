@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../database/connections/databaseConnection');
 const { voteThread } = require('../database/dbQueries/reactionQuery');
 const { fetchThreadFrontPage, fetchThreadById, fetchComments } = require('../database/dbQueries/threadQuery');
+const { fetchThreadsByCategoryIds } = require('../database/dbQueries/threadQuery');
 const { deleteCommentAndReplies } = require('../database/dbQueries/commentQuery');
 
 // GET /threads - list recent threads 

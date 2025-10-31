@@ -10,6 +10,8 @@ import Profile from './components/Profile';
 import Footer from './components/Footer';
 import ThreadView from './components/ThreadView';
 import SearchResults from './components/SearchResults';
+import CategoryPage from './components/CategoryPage';
+import { OrbitProgress } from 'react-loading-indicators';
 // We'll fetch categories and threads from the backend instead of using mock data
 
 
@@ -19,8 +21,12 @@ function App() {
   const [categories, setCategories] = useState([]);
   const [threadsData, setThreadsData] = useState([]);
   const [visibleCount, setVisibleCount] = useState(8);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
 
   useEffect(() => {
+    setLoading(true);
     // fetch categories and threads from backend
     const load = async () => {
       try {
@@ -48,7 +54,7 @@ function App() {
           const ct = tRes.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
             const tBody = await tRes.json();
-            // threads router returns { ok:true, threads }
+
             setThreadsData(tBody.threads || []);
           } else {
             const txt = await tRes.text();
@@ -62,9 +68,24 @@ function App() {
         }
       } catch (err) {
         console.error('Failed to load threads', err);
+      }finally{
+        setLoading(false);
       }
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    // load subscriptions if logged in
+    (async () => {
+      try {
+        const res = await fetch('/api/me/subscriptions', { credentials: 'include' });
+        if (res.ok) {
+          const body = await res.json();
+          setSubscriptions(body.subscriptions || []);
+        }
+      } catch (e) {}
+    })();
   }, []);
 
   // reset visible count when sorting or category changes so the user sees the top of the new list
@@ -132,6 +153,11 @@ function App() {
     return scored.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [activeTab, threadsData]);
 
+  const subscribedThreads = useMemo(() => {
+    if (!subscriptions || !subscriptions.length) return [];
+    const ids = subscriptions.map(s => s.category_id);
+    return threadsData.filter(t => ids.includes(Number(t.categoryId || t.category_id || t.categories_id)));
+  }, [subscriptions, threadsData]);
 
   return (
   <Router>
@@ -141,12 +167,29 @@ function App() {
           categories={categories}
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
+          subscriptions={subscriptions}
+          onToggleSubscribe={async (catId) => {
+            try {
+              // toggle subscribe via API
+              const isSub = subscriptions.some(s => Number(s.category_id) === Number(catId));
+              if (isSub) {
+                await fetch(`/api/categories/${catId}/subscribe`, { method: 'DELETE', credentials: 'include' });
+                setSubscriptions(prev => prev.filter(s => Number(s.category_id) !== Number(catId)));
+              } else {
+                await fetch(`/api/categories/${catId}/subscribe`, { method: 'POST', credentials: 'include' });
+                setSubscriptions(prev => [...prev, { category_id: catId }]);
+              }
+            } catch (e) {
+              console.error('Toggle subscription failed', e);
+            }
+          }}
         />
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/profile" element={<Profile />} />
-        <Route path="/t/:slug/:id" element={<ThreadView />} />
+  <Route path="/t/:slug/:id" element={<ThreadView />} />
+  <Route path="/t/:categorySlug" element={<CategoryPage threadsData={threadsData} categories={categories} />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
           <main>
@@ -158,7 +201,7 @@ function App() {
               <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">
-                    {['new','top','controversial'].map(key => {
+                      {['new','subscribed','top','controversial'].map(key => {
                       const isActive = activeTab === key;
                       return (
                         <button
@@ -173,8 +216,14 @@ function App() {
                 </div>
               </div>
               <div className="w-full px-4 sm:px-6 lg:px-8">
-                <ThreadList
-                  threads={threads
+                 <div className="w-full px-4 sm:px-6 lg:px-8 min-h-[200px]" aria-busy={loading}>
+              {loading ? (
+                <div className="flex items-center justify-center py-16">
+                  <OrbitProgress variant="disc" color="#000000" size="medium" text="" textColor="" />
+                </div>
+              ) : (
+              <ThreadList
+                  threads={(activeTab === 'subscribed' ? subscribedThreads : threads)
                     .filter(t => {
                       if (!selectedCategory) return true;
                       const slug = t.categorySlug || t.category_slug || (t.category && t.category.slug);
@@ -184,10 +233,13 @@ function App() {
                     })
                     .slice(0, visibleCount)}
                 />
+                  )}
+                </div>
               </div>
             </section>
           </main>
         } />
+        <Route path="/subscriptions" element={<main><div className="w-full px-4 sm:px-6 lg:px-8"><ThreadList threads={subscribedThreads} /></div></main>} />
       </Routes>
         <Footer />
       </div>

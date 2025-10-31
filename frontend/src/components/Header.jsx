@@ -11,6 +11,8 @@ export default function Header({
   selectedCategory,
   onCategoryChange,
   isLoggedIn = false,
+  subscriptions = [],
+  onToggleSubscribe = null,
 }) {
   const [open, setOpen] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -25,11 +27,16 @@ export default function Header({
     setLocalCategories(categories || []);
   }, [categories]);
 
+  // build the list of categories the current user is subscribed to
+  const subscribedCategoryIds = new Set((subscriptions || []).map(s => Number(s.category_id || s.categoryId)).filter(n => !Number.isNaN(n)));
+  const displayCategories = localCategories.filter(c => subscribedCategoryIds.size === 0 ? false : subscribedCategoryIds.has(Number(c.categories_id || c.category_id)));
+
   const defaultCreateCategory = async (payload) => {
     try {
       const res = await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -52,9 +59,9 @@ export default function Header({
     try{
       let res;
       if (payload instanceof FormData) {
-        res = await fetch('/api/threads', { method: 'POST', body: payload });
+        res = await fetch('/api/threads', { method: 'POST', body: payload, credentials: 'include' });
       } else {
-        res = await fetch('/api/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        res = await fetch('/api/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
       }
       if (!res.ok) {
         const text = await res.text();
@@ -106,7 +113,7 @@ export default function Header({
                 }
               >
                 <option value="">All Categories</option>
-                {localCategories.map((cat) => (
+                {displayCategories.map((cat) => (
                   <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
                     {cat.name}
                   </option>
@@ -132,14 +139,22 @@ export default function Header({
             <div className="w-full md:max-w-xl">
               <div className="min-h-[44px] flex items-center">
                 <SearchBar
-                  onSearch={(q) => {
-                    const trimmed = String(q || '').trim();
-                    if (!trimmed) return;
-                    // navigate to search results page on submit
-                    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
-                  }}
-                  className="w-full min-h-[44px]"
-                />
+                      categories={localCategories}
+                      subscriptions={subscriptions}
+                      onToggleSubscribe={onToggleSubscribe}
+                      onCategorySelect={(value) => {
+                        // propagate selection to parent and navigate to category page
+                        onCategoryChange && onCategoryChange(value);
+                        if (value) navigate(`/t/${value}`);
+                        else navigate('/');
+                      }}
+                      onSearch={(q) => {
+                        const trimmed = String(q || '').trim();
+                        if (!trimmed) return;
+                        navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+                      }}
+                      className="w-full min-h-[44px]"
+                    />
               </div>
             </div>
           </div>
@@ -367,7 +382,7 @@ export default function Header({
                   }}
                 >
                   <option value="">All Categories</option>
-                  {localCategories.map((cat) => (
+                  {displayCategories.map((cat) => (
                     <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
                       {cat.name}
                     </option>
