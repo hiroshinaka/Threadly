@@ -136,12 +136,13 @@ function App() {
   return (
   <Router>
     <AuthProvider>
-      <div className="app">
+      <div className="app min-h-screen flex flex-col">
         <Header
           categories={categories}
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
         />
+      <div className="flex-1 bg-gray-50">
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
@@ -189,6 +190,7 @@ function App() {
           </main>
         } />
       </Routes>
+      </div>
         <Footer />
       </div>
     </AuthProvider>
