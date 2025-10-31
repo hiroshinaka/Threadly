@@ -97,6 +97,61 @@ router.post('/:thread_id/vote', async (req, res) => {
   }
 });
 
+// DELETE /threads/:thread_id - permanently delete a thread and all related data
+router.delete('/:thread_id', async (req, res) => {
+  try {
+    const { thread_id } = req.params;
+    const userId = req.session && req.session.user && req.session.user.id;
+    if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete threads' });
+
+    // ensure the thread exists and get its author
+    const [trows] = await pool.query('SELECT thread_id, author_id FROM thread WHERE thread_id = ?', [thread_id]);
+    if (!trows || !trows.length) return res.status(404).json({ ok: false, message: 'Thread not found' });
+    const thread = trows[0];
+
+    const requesterRole = req.session && req.session.user && req.session.user.role_id ? Number(req.session.user.role_id) : null;
+    const isAuthor = Number(thread.author_id) === Number(userId);
+    const isAdmin = requesterRole === 1;
+    if (!isAuthor && !isAdmin) return res.status(403).json({ ok: false, message: 'Not authorized to delete this thread' });
+
+    // perform deletions in a transaction using a dedicated connection
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // delete comment reactions for comments in this thread
+      await conn.query('DELETE cr FROM comment_reaction cr JOIN comment c ON cr.comment_id = c.comment_id WHERE c.thread_id = ?', [thread_id]);
+
+      // delete comments for this thread
+      await conn.query('DELETE FROM comment WHERE thread_id = ?', [thread_id]);
+
+      // delete thread reactions/votes
+      await conn.query('DELETE FROM thread_reaction WHERE thread_id = ?', [thread_id]);
+
+      // delete media entries for thread
+      await conn.query('DELETE FROM thread_media WHERE thread_id = ?', [thread_id]);
+
+      // delete view events for thread
+      await conn.query('DELETE FROM view_events WHERE thread_id = ?', [thread_id]);
+
+      // finally delete the thread itself
+      await conn.query('DELETE FROM thread WHERE thread_id = ?', [thread_id]);
+
+      await conn.commit();
+    } catch (e) {
+      try { await conn.rollback(); } catch (er) { }
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    return res.json({ ok: true, thread_id: Number(thread_id) });
+  } catch (err) {
+    console.error('Delete thread error', err);
+    return res.status(500).json({ ok: false, message: 'Server error' });
+  }
+});
+
 // POST /comments/:comment_id/vote - cast or remove a vote on a comment
 router.post('/comments/:comment_id/vote', async (req, res) => {
   try {
@@ -123,18 +178,30 @@ router.delete('/comments/:comment_id', async (req, res) => {
     const userId = req.session && req.session.user && req.session.user.id;
     if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete comments' });
 
-    // ensure the comment exists and is owned by the current user (authors may delete their own comments)
-    const [rows] = await pool.query('SELECT comment_id, author_id FROM comment WHERE comment_id = ?', [comment_id]);
+    // ensure the comment exists and retrieve its thread author so thread authors can moderate comments on their thread
+    const [rows] = await pool.query(
+      'SELECT c.comment_id, c.author_id, c.thread_id, t.author_id AS thread_author_id FROM comment c LEFT JOIN thread t ON c.thread_id = t.thread_id WHERE c.comment_id = ?',
+      [comment_id]
+    );
     if (!rows.length) return res.status(404).json({ ok: false, message: 'Comment not found' });
     const row = rows[0];
-  // Allow deletion if the requester is the author or an admin (role_id === 1)
-  const requesterRole = req.session && req.session.user && req.session.user.role_id ? Number(req.session.user.role_id) : null;
-  const isAuthor = Number(row.author_id) === Number(userId);
-  const isAdmin = requesterRole === 1;
-  if (!isAuthor && !isAdmin) return res.status(403).json({ ok: false, message: 'Not authorized to delete this comment' });
+    // Allow deletion if the requester is the comment author, the thread author, or an admin (role_id === 1)
+    const requesterRole = req.session && req.session.user && req.session.user.role_id ? Number(req.session.user.role_id) : null;
+    const isAuthor = Number(row.author_id) === Number(userId);
+    const isThreadAuthor = Number(row.thread_author_id) === Number(userId);
+    const isAdmin = requesterRole === 1;
+    if (!isAuthor && !isAdmin && !isThreadAuthor) return res.status(403).json({ ok: false, message: 'Not authorized to delete this comment' });
 
-    // Soft-delete: replace text with marker and reset karma to 0
-    await pool.query('UPDATE comment SET text = ?, karma = 0 WHERE comment_id = ?', ['[REMOVED]', comment_id]);
+    // Soft-delete: replace text with a removal metadata JSON and reset karma to 0
+    const { reason } = req.body || {};
+    const removedObj = {
+      removed: true,
+      reason: reason || null,
+      removed_by: userId,
+      removed_at: new Date().toISOString(),
+    };
+    const textValue = JSON.stringify(removedObj);
+    await pool.query('UPDATE comment SET text = ?, karma = 0 WHERE comment_id = ?', [textValue, comment_id]);
 
     res.json({ ok: true, comment_id: Number(comment_id) });
   } catch (err) {
