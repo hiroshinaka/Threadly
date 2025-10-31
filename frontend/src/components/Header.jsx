@@ -12,6 +12,8 @@ export default function Header({
   selectedCategory,
   onCategoryChange,
   isLoggedIn = false,
+  subscriptions = [],
+  onToggleSubscribe = null,
 }) {
   const [open, setOpen] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -26,11 +28,14 @@ export default function Header({
     setLocalCategories(categories || []);
   }, [categories]);
 
+  // Note: category dropdown removed — categories are managed via the Categories page
+
   const defaultCreateCategory = async (payload) => {
     try {
       const res = await fetch('/api/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
@@ -53,9 +58,9 @@ export default function Header({
     try{
       let res;
       if (payload instanceof FormData) {
-        res = await fetch('/api/threads', { method: 'POST', body: payload });
+        res = await fetch('/api/threads', { method: 'POST', body: payload, credentials: 'include' });
       } else {
-        res = await fetch('/api/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        res = await fetch('/api/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
       }
       if (!res.ok) {
         const text = await res.text();
@@ -93,28 +98,6 @@ export default function Header({
               <img src={logo} alt="Site logo" className="w-7 h-7" />
               <span>Threadly</span>
             </a>
-
-            <nav className="flex items-center gap-3 ml-4 text-base">
-              <label htmlFor="category-select" className="sr-only">
-                Select category
-              </label>
-              <select
-                id="category-select"
-                className="bg-transparent text-slate-800 border-none rounded-md px-3 py-2 text-base font-medium focus:outline-none"
-                value={selectedCategory || ""}
-                onChange={(e) =>
-                  onCategoryChange && onCategoryChange(e.target.value || null)
-                }
-              >
-                <option value="">All Categories</option>
-                {localCategories.map((cat) => (
-                  <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </nav>
-            {/* Desktop new-thread/new-category moved into the Sidebar */}
           </div>
 
           {/* CENTER (search bar) */}
@@ -122,14 +105,22 @@ export default function Header({
             <div className="w-full md:max-w-xl">
               <div className="min-h-[44px] flex items-center">
                 <SearchBar
-                  onSearch={(q) => {
-                    const trimmed = String(q || '').trim();
-                    if (!trimmed) return;
-                    // navigate to search results page on submit
-                    navigate(`/search?q=${encodeURIComponent(trimmed)}`);
-                  }}
-                  className="w-full min-h-[44px]"
-                />
+                      categories={localCategories}
+                      subscriptions={subscriptions}
+                      onToggleSubscribe={onToggleSubscribe}
+                      onCategorySelect={(value) => {
+                        // propagate selection to parent and navigate to category page
+                        onCategoryChange && onCategoryChange(value);
+                        if (value) navigate(`/t/${value}`);
+                        else navigate('/');
+                      }}
+                      onSearch={(q) => {
+                        const trimmed = String(q || '').trim();
+                        if (!trimmed) return;
+                        navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+                      }}
+                      className="w-full min-h-[44px]"
+                    />
               </div>
             </div>
           </div>
@@ -327,29 +318,13 @@ export default function Header({
               </button>
 
               <div className="space-y-1">
-                <label
-                  htmlFor="m-category-select"
-                  className="text-base text-slate-600"
+                <button
+                  type="button"
+                  className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
+                  onClick={() => { navigate('/subreddits'); setOpen(false); }}
                 >
-                  Category
-                </label>
-                <select
-                  id="m-category-select"
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-base"
-                  value={selectedCategory || ""}
-                  onChange={(e) => {
-                    onCategoryChange &&
-                      onCategoryChange(e.target.value || null);
-                    setOpen(false);
-                  }}
-                >
-                  <option value="">All Categories</option>
-                  {localCategories.map((cat) => (
-                    <option key={cat.slug || cat.categories_id || cat.name} value={cat.slug || cat.categories_id || cat.name}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  Categories
+                </button>
               </div>
 
               {/* Mobile Buttons */}

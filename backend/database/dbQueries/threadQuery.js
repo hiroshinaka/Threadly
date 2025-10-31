@@ -14,9 +14,9 @@ let createThread = async (pool, title, author_id, category_id, body_text = null)
 let insertThreadMedia = async (pool, thread_id, media) => {
     // media: { media_type, url, public_id }
     const [r] = await pool.query(
-        `INSERT INTO thread_media (thread_id, media_type, url,  public_id)
-         VALUES (?, ?, ?, ?, ?)`,
-        [thread_id, media.media_type || 'image', media.url, null, media.public_id || null]
+        `INSERT INTO thread_media (thread_id, media_type, url, public_id)
+         VALUES (?, ?, ?, ?)`,
+        [thread_id, media.media_type || 'image', media.url, media.public_id || null]
     );
     return r.insertId;
 }
@@ -64,8 +64,9 @@ let fetchThreadFrontPage = async (pool, limit = 50) => {
 
 let fetchThreadById = async (pool, thread_id, userId = null) => {
     const [rows] = await pool.query(
-        `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.author_id, t.view_count, u.username as author
+        `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.author_id, t.view_count,c.name AS category_name, c.slug AS category_slug, t.author_id, u.username as author
          FROM thread t
+         LEFT JOIN categories c ON t.category_id = c.categories_id
          JOIN user u ON t.author_id = u.id
          WHERE t.thread_id = ?`,
         [thread_id]
@@ -150,4 +151,34 @@ let fetchComments = async (pool, thread_id, userId = null) => {
     return root;
 }
 
-module.exports = { createThread, insertThreadMedia, threadViewCount, threadCommentCount, fetchThreadFrontPage, fetchThreadById, fetchComments };
+let fetchThreadsByCategoryIds = async (pool, categoryIds = [], limit = 50) => {
+    if (!categoryIds || !Array.isArray(categoryIds) || categoryIds.length === 0) return [];
+    const placeholders = categoryIds.map(() => '?').join(',');
+    const [rows] = await pool.query(
+        `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.view_count,
+                        c.name AS category_name, c.slug AS category_slug, comments.comment_count,
+                        t.author_id, u.username AS author
+         FROM thread t
+         LEFT JOIN user u ON t.author_id = u.id
+         LEFT JOIN categories c ON t.category_id = c.categories_id
+         LEFT JOIN (select thread_id,count(*) as comment_count from comment group by thread_id) as comments ON t.thread_id = comments.thread_id
+         WHERE t.is_active = 1 AND t.category_id IN (${placeholders})
+         ORDER BY t.created_at DESC
+         LIMIT ?;`,
+        [...categoryIds, limit]
+    );
+
+    // attach media for the returned threads
+    if (rows && rows.length) {
+        const ids = rows.map(r => r.thread_id);
+        const ph = ids.map(() => '?').join(',');
+        const [mrows] = await pool.query(`SELECT media_id, thread_id, media_type, url, public_id FROM thread_media WHERE thread_id IN (${ph}) ORDER BY media_id ASC`, ids);
+        const map = {};
+        mrows.forEach(m => { map[m.thread_id] = map[m.thread_id] || []; map[m.thread_id].push(m); });
+        rows.forEach(r => { r.media = map[r.thread_id] || []; });
+    }
+
+    return rows;
+}
+
+module.exports = { createThread, insertThreadMedia, threadViewCount, threadCommentCount, fetchThreadFrontPage, fetchThreadById, fetchComments, fetchThreadsByCategoryIds };

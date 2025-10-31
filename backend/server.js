@@ -36,9 +36,12 @@ const sessionOptions = {
   resave: false,
   saveUninitialized: false,
   cookie: {
-    sameSite: isProd ? 'none' : 'lax',
-    secure: isProd, 
-    maxAge: 24 * 60 * 60 * 1000,
+    // If we're running in production (https), mark SameSite=None and secure so cross-site
+    // cookies work (Vercel/Render). For local development over http we cannot set secure=true,
+    // and browsers require SameSite to be something other than 'None' when secure is false.
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000
   }
 };
 if (mongoStore) sessionOptions.store = mongoStore;

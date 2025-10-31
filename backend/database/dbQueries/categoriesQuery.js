@@ -1,4 +1,5 @@
 const { generateUniqueSlug } = require('../../utils/slug');
+const { addSubscription } = require('./subscriptionQuery');
 
 let createCategory = async (pool, name, admin_id, text_allow, photo_allow, description) => {
     // generate slug from name and ensure uniqueness
@@ -11,6 +12,17 @@ let createCategory = async (pool, name, admin_id, text_allow, photo_allow, descr
     const [rows] = await pool.query('SELECT categories_id, name, admin_id, text_allow, photo_allow, description, slug FROM categories WHERE categories_id = ?', [insertId]);
     if (!rows.length) throw new Error('Failed to retrieve created category');
     const created = rows[0];
+
+    // auto-subscribe the creating admin to the new category (best-effort)
+    try {
+        if (admin_id && created && created.categories_id) {
+            await addSubscription(pool, admin_id, created.categories_id);
+        }
+    } catch (e) {
+        // don't fail category creation if subscription insert fails; log and continue
+        console.error('Failed to auto-subscribe category admin:', e);
+    }
+
     return created;
 }
 

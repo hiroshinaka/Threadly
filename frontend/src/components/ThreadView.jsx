@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import useAuth from '../hooks/useAuth';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 function renderBody(body_text, mediaArray) {
   // show body_text first
@@ -93,6 +94,9 @@ export default function ThreadView() {
   const [replyText, setReplyText] = useState('');
   const [commentVotes, setCommentVotes] = useState({}); // comment_id -> 1|-1|0
   const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subsLoading, setSubsLoading] = useState(false);
   // removed IntersectionObserver fallback — view POST is sent immediately on load
 
   // helper: flatten nested comments into a single array (includes replies)
@@ -137,6 +141,29 @@ export default function ThreadView() {
     });
   };
 
+  // resolve category id for thread (use thread fields or lookup by slug)
+  async function resolveCategoryId(threadObj) {
+    if (!threadObj) return null;
+    const directId = threadObj.categories_id || threadObj.category_id || threadObj.categoryId || threadObj.categoryId;
+    if (directId) return String(directId);
+    const slug = threadObj.category_slug || threadObj.category_name || threadObj.category || threadObj.categorySlug;
+    if (!slug) return null;
+    // try to fetch categories and find matching slug
+    try {
+      const res = await fetch('/api/categories');
+      if (!res.ok) return null;
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) return null;
+      const body = await res.json();
+      const cats = body.categories || [];
+      const found = cats.find(c => (c.slug && String(c.slug) === String(slug)) || (String(c.name) === String(slug)));
+      if (found) return String(found.categories_id || found.category_id || found.id || found.slug);
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
+
   // If an image is present and we measured its natural size, use that to adapt the left column width
 
   useEffect(() => {
@@ -155,7 +182,7 @@ export default function ThreadView() {
           if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
           const body = await res.json();
           setThread(body.thread);
-          try { await fetch(`/api/threads/${body.thread.thread_id}/view`, { method: 'POST', credentials: 'include' }); } catch (e) { }
+            try { await fetch(`/api/threads/${body.thread.thread_id}/view`, { method: 'POST', credentials: 'include' }); } catch (e) { }
           setComments(body.comments || []);
           // initialize comment votes from server if present (include nested replies)
           if (body.comments && Array.isArray(body.comments)) {
@@ -179,8 +206,8 @@ export default function ThreadView() {
           return;
         }
         // populate thread and fetch its comments using the numeric id
-        setThread(found);
-        try { await fetch(`/api/threads/${found.thread_id}/view`, { method: 'POST', credentials: 'include' }); } catch (e) {}
+  setThread(found);
+  try { await fetch(`/api/threads/${found.thread_id}/view`, { method: 'POST', credentials: 'include' }); } catch (e) {}
         const detail = await fetch(`/api/threads/${found.thread_id}`);
         if (!detail.ok) throw new Error(`${detail.status} ${await detail.text()}`);
         const detailBody = await detail.json();
@@ -202,6 +229,70 @@ export default function ThreadView() {
   }, [identifier]);
 
   // IntersectionObserver fallback removed — views are recorded immediately on load
+
+  // when thread is set, check the current user's subscription to this thread's category
+  useEffect(() => {
+    if (!thread) return;
+    let mounted = true;
+    (async () => {
+      setSubsLoading(true);
+      try {
+        const res = await fetch('/api/me/subscriptions', { credentials: 'include' });
+        if (!res.ok) {
+          if (mounted) setIsSubscribed(false);
+          return;
+        }
+        const body = await res.json();
+        const subs = body.subscriptions || [];
+        const catId = await resolveCategoryId(thread);
+        if (!catId) {
+          const slug = thread.category_slug || thread.category_name;
+          const matchBySlug = subs.some(s => String(s.slug) === String(slug) || String(s.category_slug) === String(slug));
+          if (mounted) setIsSubscribed(Boolean(matchBySlug));
+          return;
+        }
+        const found = subs.some(s => String(s.category_id || s.categories_id || s.categoryId) === String(catId) || String(s.category_id) === String(catId));
+        if (mounted) setIsSubscribed(Boolean(found));
+      } catch (e) {
+        if (mounted) setIsSubscribed(false);
+      } finally {
+        if (mounted) setSubsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [thread]);
+
+  
+
+  // toggle subscription for the current thread's category
+  async function toggleSubscription() {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    if (!thread) return;
+    setSubsLoading(true);
+    try {
+      let catId = await resolveCategoryId(thread);
+      if (!catId) {
+        // couldn't resolve id; abort
+        console.error('Unable to resolve category id for subscription');
+        setSubsLoading(false);
+        return;
+      }
+      if (isSubscribed) {
+        const res = await fetch(`/api/categories/${catId}/subscribe`, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) setIsSubscribed(false);
+      } else {
+        const res = await fetch(`/api/categories/${catId}/subscribe`, { method: 'POST', credentials: 'include' });
+        if (res.ok) setIsSubscribed(true);
+      }
+    } catch (e) {
+      console.error('Subscription toggle failed', e);
+    } finally {
+      setSubsLoading(false);
+    }
+  }
 
   const submitComment = async (e) => {
     e.preventDefault();
@@ -355,9 +446,17 @@ export default function ThreadView() {
   return (
     <main className="w-full max-w-7xl mx-auto p-6">
       <div className="flex flex-col md:flex-row md:items-start gap-6">
-  <article className="bg-white border border-slate-200 p-6 rounded-md md:w-1/2">
-          <h1 className="text-2xl font-semibold mb-2">{thread.title}</h1>
-          <div className="text-sm text-slate-500 mb-4">by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time></div>
+      <article className="bg-white border border-slate-200 p-6 rounded-md md:w-1/2">
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-semibold">{thread.title}</h1>
+          </div>
+          <div className="text-sm text-slate-500 mb-4">
+            by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time> •
+            <span className="text-blue-500 ml-1"><Link to={`/t/${thread.category_slug || thread.category_name || 'uncategorized'}`}>t/{thread.category_name || 'Uncategorized'}</Link></span>
+            <button onClick={toggleSubscription} disabled={subsLoading} className={`ml-3 px-2 py-1 text-xs rounded ${isSubscribed ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+              {subsLoading ? '...' : (isSubscribed ? 'Unsubscribe' : 'Subscribe')}
+            </button>
+          </div>
           <div className="prose max-w-full">{renderBody(thread.body_text, thread.media)}</div>
           <br/>
           <div>
