@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
 
-export default function Sidebar() {
+export default function Sidebar({ onOpenThread, onOpenCategory }) {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -124,11 +124,6 @@ export default function Sidebar() {
             {loggedIn ? (
               <>
                 <li>
-                  <a href="/upload" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    📥 Upload Content
-                  </a>
-                </li>
-                <li>
                   <a href="/profile" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
                     👤 Profile
                   </a>
@@ -143,17 +138,31 @@ export default function Sidebar() {
               <>
                 <li>
                   <a href="/signup" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    👉 Sign Up
+                    📝 Sign Up
                   </a>
                 </li>
                 <li>
                   <a href="/login" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    📑 Log In
+                    👉 Log In
                   </a>
                 </li>
               </>
             )}
           </ul>
+
+          <hr className="my-4" />
+
+          {/* Dedicated section for creation actions */}
+          {loggedIn && (
+            <div className="space-y-2">
+              <button onClick={() => { onOpenThread && onOpenThread(); }} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+              ✏️ New Thread
+              </button>
+              <button onClick={() => { onOpenCategory && onOpenCategory(); }} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+              ✏️ New Category
+              </button>
+            </div>
+          )}
 
           <hr className="my-4" />
 
@@ -167,13 +176,24 @@ export default function Sidebar() {
               ) : (
                 posts.map((post) => (
                   <li key={post.thread_id || post.id || post.slug} className="border-b border-gray-100 pb-1 mb-1">
-                    <a href={post.slug ? `/${post.slug}` : `/threads/${post.thread_id || post.id}`} className="block hover:text-gray-800 hover:underline">
-                      {post.title} <span className="font-light text-xs">({post.post_type || post.type || 'post'})</span>
-                    </a>
-                    <div className="flex justify-between text-gray-400 text-xs mt-0.5">
-                      <span>👁 {post.view_count || post.hits || ''}</span>
-                      <span>{new Date(post.created_at || post.createdAt || Date.now()).toLocaleDateString()}</span>
-                    </div>
+                    {(() => {
+                      const categorySlug = post.categorySlug || post.category_slug || (post.category && (post.category.slug || post.category.name));
+                      const threadIdent = post.thread_slug || post.slug || post.slugified || post.thread_id || post.id;
+                      const safeCategory = encodeURIComponent(categorySlug || 'all');
+                      const safeThread = encodeURIComponent(threadIdent || '');
+                      const href = `/t/${safeCategory}/${safeThread}`;
+                      return (
+                        <>
+                          <a href={href} className="block hover:text-gray-800 hover:underline">
+                            {post.title} <span className="font-light text-xs">({post.post_type || post.type || 'post'})</span>
+                          </a>
+                          <div className="flex justify-between text-gray-400 text-xs mt-0.5">
+                            <span>👁 {post.view_count || post.hits || ''}</span>
+                            <span>{new Date(post.created_at || post.createdAt || Date.now()).toLocaleDateString()}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </li>
                 ))
               )}
