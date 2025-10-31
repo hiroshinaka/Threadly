@@ -162,7 +162,7 @@ function App() {
   return (
   <Router>
     <AuthProvider>
-      <div className="app">
+      <div className="app min-h-screen flex flex-col">
         <Header
           categories={categories}
           selectedCategory={selectedCategory}
@@ -184,6 +184,7 @@ function App() {
             }
           }}
         />
+      <div className="flex-1 bg-gray-50">
       <Routes>
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
@@ -192,12 +193,12 @@ function App() {
   <Route path="/t/:categorySlug" element={<CategoryPage threadsData={threadsData} categories={categories} />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
-          <main>
+          <main className="bg-gray-50">
             <section className="section">
               <div className="container">
               </div>
             </section>
-            <section className="section alt bg-gray-50 py-6">
+            <section className="section alt py-6 max-w-7xl mx-auto">
               <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">
@@ -241,6 +242,7 @@ function App() {
         } />
         <Route path="/subscriptions" element={<main><div className="w-full px-4 sm:px-6 lg:px-8"><ThreadList threads={subscribedThreads} /></div></main>} />
       </Routes>
+      </div>
         <Footer />
       </div>
     </AuthProvider>

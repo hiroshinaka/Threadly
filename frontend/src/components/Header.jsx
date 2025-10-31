@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchBar from "./SearchBar";
+import Sidebar from './Sidebar';
 import CategoryModal from './CategoryModal';
 import ThreadModal from './ThreadModal';
 import logo from "../images/spool-of-thread.png";
@@ -78,7 +79,7 @@ export default function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-2 text-base font-medium">
+  <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-2 text-base font-medium">
       <div className="w-full px-3 sm:px-4">
         {/* Layout grid */}
         <div
@@ -120,18 +121,7 @@ export default function Header({
                 ))}
               </select>
             </nav>
-            <button
-              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
-              onClick={() => setShowThreadModal(true)}
-            >
-              + New Thread
-            </button>
-            <button
-              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
-              onClick={() => setShowCategoryModal(true)}
-            >
-              + New Category
-            </button>
+            {/* Desktop new-thread/new-category moved into the Sidebar */}
           </div>
 
           {/* CENTER (search bar) */}
@@ -161,13 +151,6 @@ export default function Header({
 
           {/* RIGHT (desktop) */}
           <div className="hidden md:flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0 justify-self-end">
-            <button
-              className="text-slate-600 hover:text-slate-900 transition-colors duration-200 ease-in-out bg-transparent border-none cursor-pointer text-base"
-              onClick={() => navigate("/#explore")}
-            >
-              Explore
-            </button>
-
             <div className="flex items-center gap-3 ml-4 flex-nowrap">
                   {!loggedIn ? (
                 <>
@@ -193,7 +176,7 @@ export default function Header({
                   >
                     <span className="sr-only">Toggle dashboard menu</span>
                     <img
-                      src={user?.avatar || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop"}
+                      src={user?.image_url || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop"}
                       alt={user ? user.username : "User"}
                       className="h-10 w-10 rounded-full object-cover"
                     />
@@ -269,7 +252,7 @@ export default function Header({
             <button
               aria-label="Open menu"
               onClick={() => setOpen(true)}
-              className="inline-flex items-center justify-center h-[44px] w-[44px] rounded-md border border-slate-300 hover:bg-slate-50 transition-colors duration-200 ease-in-out"
+              className="inline-flex items-center justify-center h-[44px] w-[44px] rounded-md border border-slate-300 hover:bg-slate-50 transition-colors duration-200 ease-in-out md:hidden absolute left-3 top-1/2 -translate-y-1/2 z-50"
             >
               <svg
                 width="22"
@@ -338,13 +321,7 @@ export default function Header({
 
             {/* Mobile Menu Content */}
             <div className="p-4 space-y-4">
-              <a
-                href="/"
-                className="block text-slate-700 hover:text-slate-900 text-base font-medium"
-                onClick={() => setOpen(false)}
-              >
-                Explore
-              </a>
+              {/* Explore link removed (desktop Explore button removed) */}
               <button
                 type="button"
                 className="block text-left w-full text-slate-700 hover:text-slate-900 text-base font-medium"
@@ -445,6 +422,7 @@ export default function Header({
         </div>
       )}
     </header>
+  <Sidebar onOpenThread={() => setShowThreadModal(true)} onOpenCategory={() => setShowCategoryModal(true)} />
       <CategoryModal
         isOpen={showCategoryModal}
         onClose={() => setShowCategoryModal(false)}

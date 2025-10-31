@@ -1,28 +1,83 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useAuth from '../hooks/useAuth';
+import ThreadCard from './ThreadCard';
+import Comment from './Comment';
 
 export default function Profile() {
-  const { user, loggedIn } = useAuth();
+  const { user, loggedIn, refresh } = useAuth();
   const [tab, setTab] = useState('posts'); // 'posts' | 'comments'
   const [showContribModal, setShowContribModal] = useState(false);
 
+  // profile data fetched from backend
+  const [posts, setPosts] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [counts, setCounts] = useState({ post_count: 0, comment_count: 0 });
+  const [loading, setLoading] = useState(true);
+
   const fileInputRef = useRef(null);
   const defaultAvatar = 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop';
-  const [userAvatar, setUserAvatar] = useState(user?.avatar || defaultAvatar);
+  const [userAvatar, setUserAvatar] = useState(user?.image_url || defaultAvatar);
 
   useEffect(() => {
-    setUserAvatar(user?.avatar || defaultAvatar);
+    setUserAvatar(user?.image_url || defaultAvatar);
+  }, [user]);
+
+  // fetch profile data for logged-in user
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!user || !user.id) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch('/api/profile/me', { credentials: 'include' });
+        const body = await res.json();
+        if (!mounted) return;
+        if (body && body.ok) {
+          setPosts(body.posts || []);
+          setComments(body.comments || []);
+          setCounts(body.counts || { post_count: 0, comment_count: 0 });
+        }
+      } catch (e) {
+        console.error('Failed to load profile data', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
   }, [user]);
 
   const handleFileChange = (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = () => {
-      setUserAvatar(reader.result);
-      // TODO: upload the file to the backend to persist the avatar.
-    };
+    reader.onload = () => setUserAvatar(reader.result);
     reader.readAsDataURL(file);
+
+    // upload to backend
+    const form = new FormData();
+    form.append('avatar', file);
+    (async () => {
+      try {
+        const res = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          credentials: 'include',
+          body: form,
+        });
+        const body = await res.json();
+        if (body && body.ok && body.user) {
+          if (typeof refresh === 'function') await refresh();
+          setUserAvatar(body.user.image_url || defaultAvatar);
+        } else {
+          console.error('Avatar upload failed', body);
+        }
+      } catch (err) {
+        console.error('Avatar upload error', err);
+      }
+    })();
   };
 
   useEffect(() => {
@@ -44,9 +99,7 @@ export default function Profile() {
     );
   }
   
-  /*Uncomment this section*/
-
-  //const myPosts = seedThreads.filter(t => t.author === (user?.username || ''));
+  const myPosts = posts;
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -90,15 +143,11 @@ export default function Profile() {
             <div className="mt-4 flex gap-4 items-center">
               <div>
                 <div className="text-sm text-slate-500">Karma</div>
-                {/*Uncomment this section*/} 
-
-                {/* <div className="font-medium">{myPosts.reduce((s, p) => s + (p.likes || 0), 0)}</div> */}
+                <div className="font-medium">{myPosts.reduce((s, p) => s + (p.karma || 0), 0)}</div>
               </div>
-              <button onClick={() => setShowContribModal(true)}>
+              <button onClick={() => setShowContribModal(true)} className="text-left">
                 <div className="text-sm text-slate-500">Contributions</div>
-                <div className="font-medium text-left text-slate-900">
-                  {/* {myPosts.length} */} 
-                </div>
+                <div className="font-medium text-left text-slate-900">{counts.post_count + counts.comment_count}</div>
               </button>
             </div>
           </div>
@@ -122,29 +171,37 @@ export default function Profile() {
             </button>
           </div>
 
-          {/*Uncomment this section*/} 
-
-          {/* <div className="mt-4 space-y-4">
-            {tab === 'posts' && (
+          <div className="mt-4 space-y-4">
+            {loading ? (
+              <div className="p-4 bg-white rounded shadow text-slate-600">Loading…</div>
+            ) : (
               <>
-                {myPosts.length === 0 ? (
-                  <div className="p-4 bg-white rounded shadow text-slate-600">No posts yet.</div>
-                ) : (
-                  {myPosts.map(post => (
-                    <article key={post.id} className="p-4 bg-white rounded shadow">
-                      <h3 className="text-base font-semibold text-slate-900">{post.title}</h3>
-                      <div className="text-sm text-slate-500 mt-1">{post.categorySlug} • {new Date(post.createdAt).toLocaleString()}</div>
-                      <div className="mt-2 text-sm text-slate-700">{post.views} views • {post.likes} likes • {post.commentCount} comments</div>
-                    </article>
-                  ))
+                {tab === 'posts' && (
+                  <>
+                    {myPosts.length === 0 ? (
+                      <div className="p-4 bg-white rounded shadow text-slate-600">No posts yet.</div>
+                    ) : (
+                      myPosts.map(post => (
+                        <ThreadCard key={post.thread_id} thread={post} />
+                      ))
+                    )}
+                  </>
+                )}
+
+                {tab === 'comments' && (
+                  <>
+                    {comments.length === 0 ? (
+                      <div className="p-4 bg-white rounded shadow text-slate-600">No comments yet.</div>
+                    ) : (
+                      comments.map(c => (
+                        <Comment key={c.comment_id} comment={c} authorName={user?.username} authorAvatar={userAvatar} />
+                      ))
+                    )}
+                  </>
                 )}
               </>
             )}
-
-            {tab === 'comments' && (
-              <div className="p-4 bg-white rounded shadow text-slate-600">No comments yet.</div>
-            )}
-          </div> */}
+          </div>
           
         </section>
 
@@ -177,14 +234,13 @@ export default function Profile() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
-                  {/*Uncomment this section*/} 
-                  {/* <div className="text-center">
+                  <div className="text-center">
                     <div className="text-xs text-slate-400">Posts</div>
-                    <div className="text-2xl font-semibold">{myPosts.length}</div>
-                  </div> */}
+                    <div className="text-2xl font-semibold">{counts.post_count}</div>
+                  </div>
                   <div className="text-center">
                     <div className="text-xs text-slate-400">Comments</div>
-                    <div className="text-2xl font-semibold">0</div>
+                    <div className="text-2xl font-semibold">{counts.comment_count}</div>
                   </div>
                 </div>
               </div>

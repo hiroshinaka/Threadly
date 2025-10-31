@@ -43,4 +43,15 @@ let getUserWithPassword = async (pool, username) => {
     return rows[0];
 }
 
-module.exports = { createUser, getUserByUsername, getUserWithPassword };
+let updateUserImage = async (pool, userId, imageUrl) => {
+    const [result] = await pool.query(
+        'UPDATE user SET image_url = ? WHERE id = ?',
+        [imageUrl, userId]
+    );
+
+    const [rows] = await pool.query('SELECT id, username, role_id, image_url FROM user WHERE id = ?', [userId]);
+    if (!rows.length) return null;
+    return rows[0];
+}
+
+module.exports = { createUser, getUserByUsername, getUserWithPassword, updateUserImage };

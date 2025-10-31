@@ -7,9 +7,13 @@ const cloudinary = require('cloudinary').v2;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6*1024*1024 } });
 const { createCategory, searchCategoriesByName } = require('../database/dbQueries/categoriesQuery');
 const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
-const { createUser, getUserByUsername, getUserWithPassword } = require('../database/dbQueries/userQuery');
+const { createUser, getUserByUsername, getUserWithPassword, updateUserImage } = require('../database/dbQueries/userQuery');
 const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
+<<<<<<< HEAD
 const { addSubscription, removeSubscription, listSubscriptionsForUser } = require('../database/dbQueries/subscriptionQuery');
+=======
+const { fetchUserPosts, fetchUserComments, fetchUserContribCounts } = require('../database/dbQueries/profileQuery');
+>>>>>>> main
 
 const bcrypt = require('bcryptjs');
 const joi = require('joi');
@@ -111,11 +115,76 @@ router.post('/login', async (req, res) => {
     }
 });
 
-router.get('/me', (req, res) => {
-	if (req.session && req.session.user) {
+router.get('/me', async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || !req.session.user.id) {
+			return res.json({ ok: false });
+		}
+		const userId = req.session.user.id;
+		const [rows] = await pool.query('SELECT id, username, role_id, image_url FROM user WHERE id = ?', [userId]);
+		if (!rows.length) return res.json({ ok: false });
+		// update session user to include image_url so subsequent requests have it
+		req.session.user = { ...req.session.user, image_url: rows[0].image_url };
 		return res.json({ ok: true, user: req.session.user });
+	} catch (err) {
+		console.error('Error in /me', err);
+		return res.status(500).json({ ok: false });
 	}
-	return res.json({ ok: false });
+});
+
+// GET /api/profile/me - returns posts and comments for the logged-in user
+router.get('/profile/me', async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || !req.session.user.id) {
+			return res.status(401).json({ ok: false, message: 'Unauthorized' });
+		}
+		const userId = req.session.user.id;
+		const posts = await fetchUserPosts(pool, userId, 500);
+		const comments = await fetchUserComments(pool, userId, 500);
+		const counts = await fetchUserContribCounts(pool, userId);
+		// attach current session user data (including image_url if set) so frontend can show avatar
+		const sessionUser = req.session.user || {};
+		res.json({ ok: true, posts, comments, counts, sessionUser });
+	} catch (err) {
+		console.error('Error fetching profile data', err);
+		res.status(500).json({ ok: false, message: 'Failed to fetch profile data' });
+	}
+});
+
+// POST /api/profile/avatar - upload avatar image and persist to user.image_url
+router.post('/profile/avatar', upload.single('avatar'), async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || !req.session.user.id) {
+			return res.status(401).json({ ok: false, message: 'Unauthorized' });
+		}
+
+		const userId = req.session.user.id;
+
+		if (!req.file) {
+			return res.status(400).json({ ok: false, message: 'No file uploaded' });
+		}
+
+		// upload buffer to cloudinary
+		const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+		const uploadResult = await cloudinary.uploader.upload(dataUri, {
+			folder: 'threadly/avatars',
+			resource_type: 'image',
+			transformation: [{ width: 800, height: 800, crop: 'limit' }]
+		});
+
+		// persist to DB
+		const updatedUser = await updateUserImage(pool, userId, uploadResult.secure_url);
+
+		// update session user so /api/me reflects new image
+		if (req.session && req.session.user) {
+			req.session.user.image_url = updatedUser.image_url;
+		}
+
+		res.json({ ok: true, user: updatedUser });
+	} catch (err) {
+		console.error('Avatar upload failed', err);
+		res.status(500).json({ ok: false, message: 'Avatar upload failed' });
+	}
 });
 
 router.post('/logout', (req, res) => {

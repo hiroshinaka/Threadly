@@ -353,7 +353,7 @@ export default function ThreadView() {
   if (!thread) return <div className="p-6">Thread not found</div>;
 
   return (
-    <main className="w-full p-6">
+    <main className="w-full max-w-7xl mx-auto p-6">
       <div className="flex flex-col md:flex-row md:items-start gap-6">
   <article className="bg-white border border-slate-200 p-6 rounded-md md:w-1/2">
           <h1 className="text-2xl font-semibold mb-2">{thread.title}</h1>
