@@ -29,9 +29,6 @@ app.use(cors({
 app.use(express.json());
 
 // ---- Sessions (cross-site cookie for Vercel -> Render)
-// For local development we must not set `secure: true` because that prevents
-// the cookie from being set over plain HTTP. Use production-safe settings
-// when NODE_ENV=production.
 app.set('trust proxy', 1);
 const isProd = process.env.NODE_ENV === 'production';
 const sessionOptions = {
@@ -40,7 +37,7 @@ const sessionOptions = {
   saveUninitialized: false,
   cookie: {
     sameSite: isProd ? 'none' : 'lax',
-    secure: isProd, // only send cookie over HTTPS in production
+    secure: isProd, 
     maxAge: 24 * 60 * 60 * 1000,
   }
 };
