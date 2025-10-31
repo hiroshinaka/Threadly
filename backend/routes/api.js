@@ -9,11 +9,7 @@ const { createCategory, searchCategoriesByName } = require('../database/dbQuerie
 const { createThread, insertThreadMedia } = require('../database/dbQueries/threadQuery');
 const { createUser, getUserByUsername, getUserWithPassword, updateUserImage } = require('../database/dbQueries/userQuery');
 const { shouldRecordView, insertViewEvent, incrementThreadViewCount, hashIp } = require('../database/dbQueries/viewQuery');
-<<<<<<< HEAD
 const { addSubscription, removeSubscription, listSubscriptionsForUser } = require('../database/dbQueries/subscriptionQuery');
-=======
-const { fetchUserPosts, fetchUserComments, fetchUserContribCounts } = require('../database/dbQueries/profileQuery');
->>>>>>> main
 
 const bcrypt = require('bcryptjs');
 const joi = require('joi');
