@@ -104,15 +104,19 @@ router.delete('/:thread_id', async (req, res) => {
     const userId = req.session && req.session.user && req.session.user.id;
     if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete threads' });
 
-    // ensure the thread exists and get its author
-    const [trows] = await pool.query('SELECT thread_id, author_id FROM thread WHERE thread_id = ?', [thread_id]);
+    // ensure the thread exists and get its author and category owner
+    const [trows] = await pool.query(
+      'SELECT t.thread_id, t.author_id, t.category_id, c.admin_id AS category_admin_id FROM thread t LEFT JOIN categories c ON t.category_id = c.categories_id WHERE t.thread_id = ?',
+      [thread_id]
+    );
     if (!trows || !trows.length) return res.status(404).json({ ok: false, message: 'Thread not found' });
     const thread = trows[0];
 
     const requesterRole = req.session && req.session.user && req.session.user.role_id ? Number(req.session.user.role_id) : null;
     const isAuthor = Number(thread.author_id) === Number(userId);
     const isAdmin = requesterRole === 1;
-    if (!isAuthor && !isAdmin) return res.status(403).json({ ok: false, message: 'Not authorized to delete this thread' });
+    const isCategoryAdmin = Number(thread.category_admin_id) === Number(userId);
+    if (!isAuthor && !isAdmin && !isCategoryAdmin) return res.status(403).json({ ok: false, message: 'Not authorized to delete this thread' });
 
     // perform deletions in a transaction using a dedicated connection
     const conn = await pool.getConnection();
@@ -178,9 +182,9 @@ router.delete('/comments/:comment_id', async (req, res) => {
     const userId = req.session && req.session.user && req.session.user.id;
     if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete comments' });
 
-    // ensure the comment exists and retrieve its thread author so thread authors can moderate comments on their thread
+    // ensure the comment exists and retrieve its thread author and category owner so thread and category authors can moderate
     const [rows] = await pool.query(
-      'SELECT c.comment_id, c.author_id, c.thread_id, t.author_id AS thread_author_id FROM comment c LEFT JOIN thread t ON c.thread_id = t.thread_id WHERE c.comment_id = ?',
+      'SELECT c.comment_id, c.author_id, c.thread_id, t.author_id AS thread_author_id, cat.admin_id AS category_admin_id FROM comment c LEFT JOIN thread t ON c.thread_id = t.thread_id LEFT JOIN categories cat ON t.category_id = cat.categories_id WHERE c.comment_id = ?',
       [comment_id]
     );
     if (!rows.length) return res.status(404).json({ ok: false, message: 'Comment not found' });
@@ -190,7 +194,8 @@ router.delete('/comments/:comment_id', async (req, res) => {
     const isAuthor = Number(row.author_id) === Number(userId);
     const isThreadAuthor = Number(row.thread_author_id) === Number(userId);
     const isAdmin = requesterRole === 1;
-    if (!isAuthor && !isAdmin && !isThreadAuthor) return res.status(403).json({ ok: false, message: 'Not authorized to delete this comment' });
+    const isCategoryAdmin = Number(row.category_admin_id) === Number(userId);
+    if (!isAuthor && !isAdmin && !isThreadAuthor && !isCategoryAdmin) return res.status(403).json({ ok: false, message: 'Not authorized to delete this comment' });
 
     // Soft-delete: replace text with a removal metadata JSON and reset karma to 0
     const { reason } = req.body || {};

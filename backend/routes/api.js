@@ -231,6 +231,27 @@ router.get('/categories', async (req, res) => {
 	}
 });
 
+// GET /categories/:id_or_slug - fetch a single category with admin info
+router.get('/categories/:id', async (req, res) => {
+	try {
+		const idOrSlug = req.params.id;
+		// try to match either by numeric id or by slug
+		const [rows] = await pool.query(
+			`SELECT c.categories_id, c.name, c.text_allow, c.photo_allow, c.slug, c.description, c.admin_id, u.username AS admin_username
+			 FROM categories c
+			 LEFT JOIN user u ON u.id = c.admin_id
+			 WHERE c.categories_id = ? OR c.slug = ?
+			 LIMIT 1`,
+			[idOrSlug, idOrSlug]
+		);
+		if (!rows || !rows.length) return res.status(404).json({ ok: false, message: 'Category not found' });
+		res.json({ ok: true, category: rows[0] });
+	} catch (err) {
+		console.error('Error fetching category', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
 // POST /categories/:id/subscribe - subscribe logged-in user to a category
 router.post('/categories/:id/subscribe', async (req, res) => {
 	try {
@@ -258,6 +279,97 @@ router.delete('/categories/:id/subscribe', async (req, res) => {
 	} catch (err) {
 		console.error('Unsubscribe error', err);
 		res.status(500).json({ ok: false, message: 'DB error' });
+	}
+});
+
+// DELETE /categories/:id - permanently delete a category and all related threads, comments, votes, media, subscriptions
+router.delete('/categories/:id', async (req, res) => {
+	try {
+		const userId = req.session && req.session.user && req.session.user.id;
+		if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete categories' });
+
+		const categoryId = Number(req.params.id);
+		if (!categoryId) return res.status(400).json({ ok: false, message: 'Invalid category id' });
+
+		// ensure category exists and get its admin/creator
+		const [crows] = await pool.query('SELECT categories_id, admin_id FROM categories WHERE categories_id = ?', [categoryId]);
+		if (!crows || !crows.length) return res.status(404).json({ ok: false, message: 'Category not found' });
+		const category = crows[0];
+
+		const requesterRole = req.session && req.session.user && req.session.user.role_id ? Number(req.session.user.role_id) : null;
+		const isAdmin = requesterRole === 1;
+		const isCreator = Number(category.admin_id) === Number(userId);
+		if (!isAdmin && !isCreator) return res.status(403).json({ ok: false, message: 'Not authorized to delete this category' });
+
+		const conn = await pool.getConnection();
+		let threadIds = [];
+		let publicIds = [];
+		try {
+			await conn.beginTransaction();
+
+			// find threads in this category
+			const [trows] = await conn.query('SELECT thread_id FROM thread WHERE category_id = ?', [categoryId]);
+			threadIds = trows && trows.length ? trows.map(r => r.thread_id) : [];
+
+			if (threadIds.length) {
+				const ph = threadIds.map(() => '?').join(',');
+
+				// collect public_ids for Cloudinary cleanup (best-effort)
+				try {
+					const [mrows] = await conn.query(`SELECT public_id FROM thread_media WHERE thread_id IN (${ph})`, threadIds);
+					mrows.forEach(m => { if (m && m.public_id) publicIds.push(m.public_id); });
+				} catch (e) {
+					console.error('Failed to fetch thread media public ids', e);
+				}
+
+				// delete comment reactions for comments in these threads
+				await conn.query(`DELETE cr FROM comment_reaction cr JOIN comment c ON cr.comment_id = c.comment_id WHERE c.thread_id IN (${ph})`, threadIds);
+
+				// delete comments for these threads
+				await conn.query(`DELETE FROM comment WHERE thread_id IN (${ph})`, threadIds);
+
+				// delete thread reactions/votes
+				await conn.query(`DELETE FROM thread_reaction WHERE thread_id IN (${ph})`, threadIds);
+
+				// delete media entries for threads
+				await conn.query(`DELETE FROM thread_media WHERE thread_id IN (${ph})`, threadIds);
+
+				// delete view events for threads
+				await conn.query(`DELETE FROM view_events WHERE thread_id IN (${ph})`, threadIds);
+
+				// finally delete the threads themselves
+				await conn.query(`DELETE FROM thread WHERE thread_id IN (${ph})`, threadIds);
+			}
+
+			// delete subscriptions to this category
+			await conn.query('DELETE FROM subscription WHERE category_id = ?', [categoryId]);
+
+			// delete the category row
+			await conn.query('DELETE FROM categories WHERE categories_id = ?', [categoryId]);
+
+			await conn.commit();
+		} catch (e) {
+			try { await conn.rollback(); } catch (er) { }
+			throw e;
+		} finally {
+			conn.release();
+		}
+
+		// After commit: attempt to delete Cloudinary assets for any collected public_ids (best-effort)
+		if (publicIds.length) {
+			try {
+				const results = await Promise.allSettled(publicIds.map(pid => cloudinary.uploader.destroy(pid, { resource_type: 'image' })));
+				const succeeded = results.filter(r => r.status === 'fulfilled').length;
+				console.log(`Cloudinary: attempted to delete ${publicIds.length} assets, ${succeeded} operations fulfilled`);
+			} catch (e) {
+				console.error('Cloudinary deletion error', e);
+			}
+		}
+
+		res.json({ ok: true, category_id: categoryId, deleted_threads: threadIds.length, attempted_media_deleted: publicIds.length });
+	} catch (err) {
+		console.error('Delete category error', err);
+		res.status(500).json({ ok: false, message: 'Server error' });
 	}
 });
 
