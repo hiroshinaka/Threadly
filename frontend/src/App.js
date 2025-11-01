@@ -148,6 +148,9 @@ function App() {
     if (activeTab === 'controversial') {
       return scored.sort((a, b) => ((b.commentCount || b.comment_count || 0) - (a.commentCount || a.comment_count || 0)));
     }
+    if (activeTab === 'most viewed'){
+      return scored.sort((a, b) => ((b.view_count || b.viewCount || b.views || 0) - (a.view_count || a.viewCount || a.views || 0)));
+    }
 
     // fallback: if unknown tab, return by created date
     return scored.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -202,7 +205,7 @@ function App() {
               <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">
-                      {['new','subscribed','top','controversial'].map(key => {
+                      {['new','subscribed','top','controversial','most viewed'].map(key => {
                       const isActive = activeTab === key;
                       return (
                         <button
