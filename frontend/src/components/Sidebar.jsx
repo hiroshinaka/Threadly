@@ -306,7 +306,10 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
                       seenGroups.add(keyForCat);
                       rendered.push(
                         <li key={keyForCat}>
-                          <button onClick={() => { onOpenCategory && onOpenCategory(cat); }} className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                          <button
+                            onClick={() => { if (onOpenCategory) { onOpenCategory(cat); } else { navigate(`/${encodeURIComponent(keyForCat)}`); } }}
+                            className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors text-left w-full"
+                          >
                             {cat.name}
                           </button>
                         </li>
