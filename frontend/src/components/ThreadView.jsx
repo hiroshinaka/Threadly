@@ -41,14 +41,15 @@ function renderBody(body_text, mediaArray) {
 }
 
 function renderCommentText(text) {
-  if (!text && text !== '') return null;
-  // if text is a JSON-encoded removal marker, render a nicer placeholder
+  if (text === null || text === undefined) return null;
+  // Prefer to show a removal placeholder when comment text encodes a removal marker
   if (typeof text === 'string') {
     const trimmed = text.trim();
     if (trimmed === '[REMOVED BY USER]') {
       return <div className="mt-2 italic text-sm text-slate-500">Comment removed</div>;
     }
-    if (trimmed.startsWith('{') || trimmed.startsWith('"{')) {
+    // try parse JSON removal markers like '{"removed":true, "reason":"..."}'
+  if (trimmed.startsWith('{') || trimmed.startsWith('"{')) {
       try {
         const parsed = JSON.parse(trimmed);
         if (parsed && parsed.removed) {
@@ -57,55 +58,190 @@ function renderCommentText(text) {
           return <div className="mt-2 italic text-sm text-slate-500">Comment removed</div>;
         }
       } catch (e) {
-        // fallthrough to render raw text
+        // not JSON — fallthrough to render raw text
       }
     }
   }
-  return <div className="mt-2">{text}</div>;
+  return <div className="mt-2 break-words" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{String(text)}</div>;
 }
 
 // Stable recursive comment renderer (defined outside the main component so its identity doesn't change between renders)
-function CommentNode({ comment, replyingTo, setReplyingTo, deleteComment, replyText, setReplyText, submitReply, voteComment, commentVotes, currentUser, threadAuthorId }) {
+function CommentNode(props) {
+  const {
+    comment, replyingTo, setReplyingTo, deleteComment,
+    replyText, setReplyText, submitReply, voteComment,
+    commentVotes, currentUser, threadAuthorId, depth = 0,
+    parentPad = 0 // absolute padLeft of parent (px) to avoid cumulative padding
+  } = props;
+
+  // Visual knobs
+  const INDENT_STEP = 12;      // px per level (visual only)
+  // After this depth, do NOT increase horizontal offset any further.
+  // Top-level comment is depth=0; cap at depth 3 so further replies don't shift right.
+  const INDENT_CAP_LEVEL = 3;  // stop increasing padding after this depth
+  const COLLAPSE_AT = 4;
+
+  // Compute a safe, non-growing indent: padding-left on the row
+  const cappedLevel = Math.min(depth, INDENT_CAP_LEVEL);
+  const padLeft = cappedLevel * INDENT_STEP; // absolute desired pad for this node
+  // To avoid cumulative indentation (child padding adding on top of parent padding), compute the local padding
+  // applied inside this element relative to the parent's absolute pad.
+  const localPad = Math.max(0, padLeft - (Number(parentPad) || 0));
+
+  const [expanded, setExpanded] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const countDescendants = (node) => {
+    if (!node?.replies?.length) return 0;
+    let n = node.replies.length;
+    for (const r of node.replies) n += countDescendants(r);
+    return n;
+    };
+
+  // determine if this comment is a removal marker
+  const isRemoved = (() => {
+    const t = comment?.text;
+    if (t === null || t === undefined) return false;
+    if (typeof t !== 'string') return false;
+    const trimmed = t.trim();
+    if (trimmed === '[REMOVED BY USER]') return true;
+    if (trimmed.startsWith('{') || trimmed.startsWith('"{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && parsed.removed) return true;
+      } catch (e) {
+        // not JSON
+      }
+    }
+    return false;
+  })();
+
   return (
-    <li key={comment.comment_id} className="border rounded-md p-3 bg-white">
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-500 mb-1">{comment.username || comment.author_id} • <time dateTime={comment.created_at}>{new Date(comment.created_at).toISOString().slice(0,10)}</time></div>
-        <div className="flex items-center gap-2 text-sm">
-          <button onClick={() => voteComment(comment.comment_id, 1)} className={`text-slate-500 hover:text-emerald-600 ${commentVotes && commentVotes[comment.comment_id] === 1 ? 'text-emerald-600 font-bold' : ''}`}>▲</button>
-          <span className="text-slate-700 font-semibold">{comment.karma || 0}</span>
-          <button onClick={() => voteComment(comment.comment_id, -1)} className={`text-slate-500 hover:text-rose-600 ${commentVotes && commentVotes[comment.comment_id] === -1 ? 'text-rose-600 font-bold' : ''}`}>▼</button>
-        </div>
-      </div>
-  {renderCommentText(comment.text)}
-      <div className="mt-2 text-sm">
-        <button onClick={() => setReplyingTo(replyingTo === comment.comment_id ? null : comment.comment_id)} className="text-slate-600 hover:text-slate-900">Reply</button>
-        {currentUser && (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(comment.author_id) || Number(currentUser.id) === Number(threadAuthorId)) && (
-          <button onClick={() => deleteComment(comment.comment_id)} className="ml-4 text-slate-600 hover:text-slate-900">Delete</button>
-        )}
-      </div>
+    <div className="border rounded-md bg-white">
+      <div
+        className="p-3"
+        style={{ boxSizing: 'border-box', paddingLeft: 12 }}
+      >
+        <div style={{ transform: `translateX(${localPad}px)` }}>
+          <div className="flex items-start gap-2">
 
-        {replyingTo === comment.comment_id && (
-        <div className="mt-2">
-          <textarea autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} className="w-full border rounded-md p-2" rows={3} placeholder={`Reply to ${comment.username || 'user'}...`} />
-          <div className="mt-2 flex gap-2">
-            <button onClick={() => submitReply(comment.comment_id)} className="px-3 py-1 bg-slate-900 text-white rounded-md">Post reply</button>
-            <button onClick={() => { setReplyingTo(null); setReplyText(''); }} className="px-3 py-1 border rounded-md">Cancel</button>
+            <div className="flex-none w-9 flex flex-col items-center text-sm text-slate-500">
+              {!isRemoved ? (
+                <>
+                  <button
+                    onClick={() => voteComment(comment.comment_id, 1)}
+                    className={`hover:text-emerald-600 ${commentVotes?.[comment.comment_id] === 1 ? 'text-emerald-600 font-bold' : ''}`}
+                  >▲</button>
+                  <span className="text-slate-700 font-semibold">{comment.karma || 0}</span>
+                  <button
+                    onClick={() => voteComment(comment.comment_id, -1)}
+                    className={`hover:text-rose-600 ${commentVotes?.[comment.comment_id] === -1 ? 'text-rose-600 font-bold' : ''}`}
+                  >▼</button>
+                </>
+              ) : (
+                // preserve layout but hide interactive controls when removed
+                <span className="text-slate-400"> </span>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-slate-500 mb-1 flex items-center">
+                  <button
+                    onClick={() => setCollapsed(!collapsed)}
+                    aria-label={collapsed ? 'Expand comment' : 'Collapse comment'}
+                    title={collapsed ? 'Expand' : 'Collapse'}
+                    className="mr-2 w-6 h-6 text-xs flex items-center justify-center border rounded text-slate-500 hover:bg-slate-100"
+                  >
+                    {collapsed ? '+' : '−'}
+                  </button>
+                  {comment.username || comment.author_id} •{' '}
+                  <time dateTime={comment.created_at}>{new Date(comment.created_at).toISOString().slice(0, 10)}</time>
+                </div>
+              </div>
+
+            {collapsed ? (
+              <div className="mt-2 italic text-sm text-slate-500">
+                Comment collapsed{comment.replies?.length ? ` • ${countDescendants(comment)} repl${countDescendants(comment) === 1 ? 'y' : 'ies'} hidden` : ''}
+                <button onClick={() => setCollapsed(false)} className="ml-2 text-sm underline">Expand</button>
+              </div>
+            ) : (
+              <>
+                {renderCommentText(comment.text)}
+
+                <div className="mt-2 text-sm">
+                  <button
+                    onClick={() => setReplyingTo(replyingTo === comment.comment_id ? null : comment.comment_id)}
+                    className="text-slate-600 hover:text-slate-900"
+                  >
+                    Reply
+                  </button>
+                  {currentUser && (
+                    (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(comment.author_id) || Number(currentUser.id) === Number(threadAuthorId)) && (
+                      <button onClick={() => deleteComment(comment.comment_id)} className="ml-4 text-slate-600 hover:text-slate-900">Delete</button>
+                    )
+                  )}
+                </div>
+
+                {replyingTo === comment.comment_id && (
+                  <div className="mt-2">
+                    <textarea autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} className="w-full border rounded-md p-2" rows={3} placeholder={`Reply to ${comment.username || 'user'}...`} />
+                    <div className="mt-2 flex gap-2">
+                      <button onClick={() => submitReply(comment.comment_id)} className="px-3 py-1 bg-slate-900 text-white rounded-md">Post reply</button>
+                      <button onClick={() => { setReplyingTo(null); setReplyText(''); }} className="px-3 py-1 border rounded-md">Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            
+            </div>
           </div>
-        </div>
-      )}
 
-      {comment.replies && comment.replies.length > 0 && (
-        <ul className="mt-3 ml-4 space-y-2">
-          {comment.replies.map(r => (
-            <CommentNode key={r.comment_id} comment={r} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} threadAuthorId={threadAuthorId} />
-          ))}
-        </ul>
-      )}
-    </li>
+          {/* Replies container: render replies without nested list semantics; pass absolute pad to children */}
+          {comment.replies?.length > 0 && !collapsed && (
+            <div className="mt-3">
+              {(depth + 1) >= COLLAPSE_AT && !expanded ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setExpanded(true)} className="text-sm text-slate-600 underline">Show {countDescendants(comment)} more repl{countDescendants(comment) === 1 ? 'y' : 'ies'}</button>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {comment.replies.map(r => (
+                    <CommentNode
+                      key={r.comment_id}
+                      comment={r}
+                      replyingTo={replyingTo}
+                      setReplyingTo={setReplyingTo}
+                      deleteComment={deleteComment}
+                      replyText={replyText}
+                      setReplyText={setReplyText}
+                      submitReply={submitReply}
+                      voteComment={voteComment}
+                      commentVotes={commentVotes}
+                      currentUser={currentUser}
+                      threadAuthorId={threadAuthorId}
+                      depth={depth + 1}
+                      parentPad={padLeft}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {(depth + 1) >= COLLAPSE_AT && expanded && (
+                <div className="mt-2">
+                  <button onClick={() => setExpanded(false)} className="text-sm text-slate-500 underline">Hide replies</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default function ThreadView() {
+function ThreadView() {
   // App routes use /t/:slug/:id — second param is named `id` (may be numeric id or slug)
   const { id: idParam } = useParams();
   const identifier = idParam; // could be numeric id or thread slug
@@ -565,14 +701,16 @@ export default function ThreadView() {
               </div>
             </form>
 
-            <ul className="mt-4 space-y-3 max-h-[60vh] overflow-auto">
+            <div className="mt-4 space-y-3 max-h-[60vh] overflow-auto">
               {comments.map(c => (
                 <CommentNode key={c.comment_id} comment={c} replyingTo={replyingTo} setReplyingTo={setReplyingTo} deleteComment={deleteComment} replyText={replyText} setReplyText={setReplyText} submitReply={submitReply} voteComment={voteComment} commentVotes={commentVotes} currentUser={currentUser} threadAuthorId={thread && (thread.author_id || thread.authorId)} />
               ))}
-            </ul>
+            </div>
           </div>
         </aside>
       </div>
     </main>
   );
 }
+
+export default ThreadView;
