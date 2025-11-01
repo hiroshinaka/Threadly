@@ -14,7 +14,6 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
   const ref = useRef(null);
   const navigate = useNavigate();
   const { loggedIn, logout } = useAuth();
-
   // Mouse proximity handler
   useEffect(() => {
     const onMove = (e) => {
@@ -274,7 +273,7 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
                     const keyForCat = cat.categories_id || cat.category_id || cat.slug;
                     const parentKey = parentFor.get(keyForCat) || parentFor.get(cat.slug) || (cat.slug && cat.slug.includes('/') ? cat.slug.split('/').slice(0, -1).join('/') : null);
 
-                    if (parentKey) {
+                      if (parentKey) {
                       // prefer rendering under parent once
                       if (seenGroups.has(parentKey)) return;
                       seenGroups.add(parentKey);

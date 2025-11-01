@@ -11,6 +11,7 @@ export default function CategoryPage({ threadsData = [], categories = [] }) {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
   const category = categories.find(c => c.slug === categorySlug || String(c.categories_id) === String(categorySlug) || c.name === categorySlug) || null;
+  const [categoryDetail, setCategoryDetail] = useState(null);
   
 
   useEffect(() => {
@@ -36,6 +37,30 @@ export default function CategoryPage({ threadsData = [], categories = [] }) {
     })();
     return () => { mounted = false; };
   }, [category]);
+
+  // fetch detailed category info (admin_id, admin_username) for permission checks and display
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!categorySlug) return;
+      try {
+        const res = await fetch(`/api/categories/${encodeURIComponent(categorySlug)}`);
+        if (!mounted) return;
+        if (!res.ok) {
+          setCategoryDetail(null);
+          return;
+        }
+        const body = await res.json();
+        if (body && body.ok && body.category) setCategoryDetail(body.category);
+      } catch (e) {
+        if (mounted) setCategoryDetail(null);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [categorySlug]);
+
+  const textAllowed = Boolean(Number(categoryDetail?.text_allow ?? category?.text_allow ?? 1));
+  const photoAllowed = Boolean(Number(categoryDetail?.photo_allow ?? category?.photo_allow ?? 1));
 
   const threads = useMemo(() => {
     const now = Date.now();
@@ -99,7 +124,44 @@ export default function CategoryPage({ threadsData = [], categories = [] }) {
                 {subsLoading ? '...' : (isSubscribed ? 'Unsubscribe' :  'Subscribe')}
               </button>
             </div>
-            {category.description && <div className="text-sm text-slate-600 mt-1">{category.description}</div>}
+            {category.description && (
+              <div className="mt-3 p-2 bg-white border border-slate-100 rounded-md shadow-sm mr-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-sm text-slate-600">Created and Moderated by <span className="font-medium text-slate-800">{categoryDetail?.admin_username || `#${category.admin_id}`}</span></div>
+                    <div className="mt-2 flex items-center gap-2">
+                      {textAllowed && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">Text</span>}
+                      {photoAllowed && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">Photos</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-slate-700 whitespace-pre-line">{category.description}</div>
+              </div>
+            )}
+              {(currentUser && (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(categoryDetail?.admin_id || category.admin_id))) && (
+                <div className="mt-3">
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm(`Delete category "${category.name}" and all its threads? This action is permanent.`)) return;
+                      try {
+                        const catId = category.categories_id || category.category_id;
+                        const res = await fetch(`/api/categories/${encodeURIComponent(catId)}`, { method: 'DELETE', credentials: 'include' });
+                        if (!res.ok) {
+                          const txt = await res.text().catch(() => '');
+                          throw new Error(`Failed to delete category: ${res.status} ${txt}`);
+                        }
+                        navigate('/');
+                      } catch (err) {
+                        console.error('Delete category failed', err);
+                        alert('Failed to delete category');
+                      }
+                    }}
+                    className="px-3 py-1 text-xs rounded bg-red-50 text-red-700 border border-red-100"
+                  >
+                    Delete Category
+                  </button>
+                </div>
+              )}
           </div>
         </div>
         <div className="flex gap-2">
