@@ -201,8 +201,8 @@ function App() {
               <div className="container">
               </div>
             </section>
-            <section className="section alt py-6 max-w-7xl mx-auto">
-              <div className="container mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+            <section className="section alt py-6">
+              <div className="max-w-7xl mx-auto mb-6 flex items-center justify-between px-4 sm:px-6 lg:px-8">
                 <div className="section-header">
                   <div className="flex gap-3">
                       {['new','subscribed','top','controversial','most viewed'].map(key => {
@@ -219,8 +219,8 @@ function App() {
                   </div>
                 </div>
               </div>
-              <div className="w-full px-4 sm:px-6 lg:px-8">
-                 <div className="w-full px-4 sm:px-6 lg:px-8 min-h-[200px]" aria-busy={loading}>
+              <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
+                 <div className="w-full min-h-[200px]" aria-busy={loading}>
               {loading ? (
                 <div className="flex items-center justify-center py-16">
                   <OrbitProgress variant="disc" color="#000000" size="medium" text="" textColor="" />
