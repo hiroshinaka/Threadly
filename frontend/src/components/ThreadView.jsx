@@ -176,7 +176,7 @@ function CommentNode(props) {
                   >
                     Reply
                   </button>
-                  {currentUser && (
+                  {currentUser && !isRemoved && (
                     (Number(currentUser.role_id) === 1 || Number(currentUser.id) === Number(comment.author_id) || Number(currentUser.id) === Number(threadAuthorId)) && (
                       <button onClick={() => deleteComment(comment.comment_id)} className="ml-4 text-slate-600 hover:text-slate-900">Delete</button>
                     )
