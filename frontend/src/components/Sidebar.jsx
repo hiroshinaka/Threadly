@@ -166,7 +166,7 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
           <ul className="mt-6 space-y-1">
             <li>
               <a href="/" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                <i class="fa-solid fa-house"></i> Home Page
+                <i className="fa-solid fa-house"></i> Home Page
               </a>
             </li>
 
@@ -174,12 +174,12 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
               <>
                 <li>
                   <a href="/profile" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    <i class="fa-solid fa-user"></i> Profile
+                    <i className="fa-solid fa-user"></i> Profile
                   </a>
                 </li>
                 <li>
                   <button onClick={handleLogout} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-red-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                    <i className="fa-solid fa-right-from-bracket"></i> Logout
                   </button>
                 </li>
               </>
@@ -187,12 +187,12 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
               <>
                 <li>
                   <a href="/signup" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    <i class="fa-solid fa-pen"></i> Sign Up
+                    <i className="fa-solid fa-pen"></i> Sign Up
                   </a>
                 </li>
                 <li>
                   <a href="/login" className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                    <i class="fa-solid fa-right-to-bracket"></i> Log In
+                    <i className="fa-solid fa-right-to-bracket"></i> Log In
                   </a>
                 </li>
               </>
@@ -216,146 +216,36 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
                 <ul className="space-y-1 text-sm text-gray-700">
                   {subsLoading ? (
                     <li className="text-gray-400">Loading...</li>
-                  ) : (subscriptions.length === 0) ? (
+                  ) : subscriptions.length === 0 ? (
                     <li className="text-gray-400">No subscribed categories</li>
                   ) : (
-                    (() => {
-                      // Build maps for quick lookup
-                      const byId = new Map();
-                      const bySlug = new Map();
-                      categories.forEach(c => {
-                        const idKey = c.categories_id || c.category_id || String(c.id || '');
-                        if (idKey) byId.set(String(idKey), c);
-                        if (c.slug) bySlug.set(String(c.slug), c);
-                      });
-
-                      // Build parent -> children map using heuristics (explicit parent fields or slash-delimited slugs)
-                      const children = new Map();
-                      const parentFor = new Map();
-                      categories.forEach(c => {
-                        // try explicit parent id fields
-                        const parentId = c.parent_id || c.parent_categories_id || c.parentCategoryId || c.parent || c.parent_categories || null;
-                        if (parentId) {
-                          parentFor.set(c.categories_id || c.category_id || c.slug, parentId);
-                          const key = String(parentId);
-                          children.set(key, (children.get(key) || []).concat(c));
-                          return;
-                        }
-                        // try slug based hierarchy: 'parent/child'
-                        if (c.slug && c.slug.includes('/')) {
-                          const parts = c.slug.split('/').map(p => p.trim()).filter(Boolean);
-                          if (parts.length >= 2) {
-                            const parentSlug = parts.slice(0, parts.length - 1).join('/');
-                            parentFor.set(c.slug, parentSlug);
-                            children.set(parentSlug, (children.get(parentSlug) || []).concat(c));
-                            return;
-                          }
-                        }
-                        // no parent detected
-                      });
-
-                      // Now, for each subscription build display rows. Group by parent when possible.
-                      const rendered = [];
-                      const seenGroups = new Set();
-
-                      subscriptions.forEach(sub => {
-                        const catId = String(sub.category_id || sub.categories_id || sub.categoryId || sub.id || '');
-                        // find category by id or slug
-                        let cat = byId.get(catId) || bySlug.get(catId) || null;
-                        // some subscriptions may hold slug instead of id
-                        if (!cat && sub.slug) cat = bySlug.get(String(sub.slug));
-                        if (!cat) return; // skip if we can't resolve
-
-                        // determine parent key
-                        const keyForCat = cat.categories_id || cat.category_id || cat.slug;
-                        const parentKey = parentFor.get(keyForCat) || parentFor.get(cat.slug) || (cat.slug && cat.slug.includes('/') ? cat.slug.split('/').slice(0, -1).join('/') : null);
-
-                        if (parentKey) {
-                          // prefer rendering under parent once
-                          if (seenGroups.has(parentKey)) return;
-                          seenGroups.add(parentKey);
-                          // resolve parent object if available
-                          const parentCat = byId.get(String(parentKey)) || bySlug.get(String(parentKey));
-                          const childrenList = children.get(String(parentKey)) || children.get(String(parentKey)) || [];
-                          rendered.push(
-                            <li key={parentKey}>
-                              <div className="block rounded-lg px-2 py-1 text-sm font-medium text-gray-600">
-                                {parentCat ? (
-                                  <button onClick={() => { onOpenCategory && onOpenCategory(parentCat); }} className="font-medium text-slate-700 hover:underline">{parentCat.name}</button>
-                                ) : (
-                                  <span className="font-medium text-slate-700">{String(parentKey)}</span>
-                                )}
-                              </div>
-                              <ul className="pl-4 mt-1">
-                                {childrenList.map(ch => (
-                                  <li key={ch.categories_id || ch.slug}>
-                                    <button onClick={() => { onOpenCategory && onOpenCategory(ch); }} className="block rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                                      {ch.name}
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            </li>
-                          );
-                        } else {
-                          // no parent, render directly
-                          if (seenGroups.has(keyForCat)) return;
-                          seenGroups.add(keyForCat);
-                          rendered.push(
-                            <li key={keyForCat}>
-                              <button onClick={() => { onOpenCategory && onOpenCategory(cat); }} className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                                {cat.name}
-                              </button>
-                            </li>
-                          );
-                        }
-                      });
-
-                      if (parentKey) {
-                      // prefer rendering under parent once
-                      if (seenGroups.has(parentKey)) return;
-                      seenGroups.add(parentKey);
-                      // resolve parent object if available
-                      const parentCat = byId.get(String(parentKey)) || bySlug.get(String(parentKey));
-                      const childrenList = children.get(String(parentKey)) || children.get(String(parentKey)) || [];
-                      rendered.push(
-                        <li key={parentKey}>
-                          <div className="block rounded-lg px-2 py-1 text-sm font-medium text-gray-600">
-                            {parentCat ? (
-                              <button onClick={() => { onOpenCategory && onOpenCategory(parentCat); }} className="font-medium text-slate-700 hover:underline">{parentCat.name}</button>
-                            ) : (
-                              <span className="font-medium text-slate-700">{String(parentKey)}</span>
-                            )}
-                          </div>
-                          <ul className="pl-4 mt-1">
-                            {childrenList.map(ch => (
-                              <li key={ch.categories_id || ch.slug}>
-                                <button onClick={() => { onOpenCategory && onOpenCategory(ch); }} className="block rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-                                  {ch.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
+                    subscriptions.map((sub) => {
+                      const catId = sub.category_id || sub.categories_id || sub.categoryId || sub.id || sub.slug;
+                      const cat = categories.find(c =>
+                        String(c.categories_id || c.category_id || c.id || c.slug) === String(catId) ||
+                        String(c.slug) === String(sub.slug)
                       );
-                    } else {
-                      // no parent, render directly
-                      if (seenGroups.has(keyForCat)) return;
-                      seenGroups.add(keyForCat);
-                      rendered.push(
-                        <li key={keyForCat}>
+                      if (!cat) return null;
+                      const key = String(cat.categories_id || cat.category_id || cat.slug || cat.id || cat.name);
+                      return (
+                        <li key={key}>
                           <button
-                            onClick={() => { if (onOpenCategory) { onOpenCategory(cat); } else { navigate(`/${encodeURIComponent(keyForCat)}`); } }}
+                            onClick={() => {
+                              const slug = String(cat.slug || cat.categories_id || cat.category_id || cat.id || cat.name || '');
+                              navigate(`/t/${encodeURIComponent(slug)}`);
+                            }}
                             className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors text-left w-full"
                           >
                             {cat.name}
                           </button>
                         </li>
                       );
-                    }
-                  });
+                    })
+                  )}
+                </ul>
+              </div>
 
-          <div id="recent-posts" className="px-2">
+              <div id="recent-posts" className="px-2">
             <hr className="my-4" />
             <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Recent Posts</h3>
             <ul className="space-y-1 text-sm text-gray-700">
@@ -378,7 +268,7 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
                             {post.title} <span className="font-light text-xs">({post.post_type || post.type || 'post'})</span>
                           </a>
                           <div className="flex justify-between text-gray-400 text-xs mt-0.5">
-                            <span><i class="fa-solid fa-eye"></i> {post.view_count || post.hits || ''}</span>
+                                <span><i className="fa-solid fa-eye"></i> {post.view_count || post.hits || ''}</span>
                             <span>{new Date(post.created_at || post.createdAt || Date.now()).toLocaleDateString()}</span>
                           </div>
                         </>
@@ -389,8 +279,11 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
               )}
             </ul>
           </div>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
