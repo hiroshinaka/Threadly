@@ -52,7 +52,8 @@ export default function ThreadCard({ thread }) {
   const rel = dt.toISOString().slice(0, 10);
 
   const categorySlug = thread.category_slug || thread.categorySlug || (thread.category && thread.category.slug) || 'unknown';
-    const author = thread.author || thread.username || 'anonymous';
+  const author = thread.author || thread.username || 'anonymous';
+  const authorImage = thread.image_url || thread.author_image_url || thread.profile_picture || thread.avatar_url || null;
   const likes = thread.likes || 0;
   const commentCount = thread.commentCount || thread.comment_count || 0;
   // prefer the canonical DB column `view_count`, then camelCase `viewCount`, then legacy `views`
@@ -119,7 +120,16 @@ export default function ThreadCard({ thread }) {
           <div className="flex-1">
             <div className="flex items-center gap-3 text-sm text-slate-500 mb-1">
               <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-semibold">t/{categorySlug}</span>
-              <span>by {author}</span>
+              <span className="flex items-center gap-1">
+                <img
+                  src={authorImage || '/default-avatar.svg'}
+                  alt="author avatar"
+                  className="w-6 h-6 rounded-full object-cover border border-slate-200 bg-slate-100"
+                  onError={e => { e.target.onerror = null; e.target.src = '/default-avatar.svg'; }}
+                  style={{ minWidth: 24, minHeight: 24 }}
+                />
+                <span>by {author}</span>
+              </span>
               <span>•</span>
               <time dateTime={dt.toISOString()}>{rel}</time>
             </div>

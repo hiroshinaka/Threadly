@@ -6,7 +6,7 @@ export default function Comment({ comment, authorName, authorAvatar }) {
   const rel = dt.toLocaleDateString();
 
   const name = authorName || comment.username || 'User';
-  const avatar = authorAvatar || comment.avatar || 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop';
+  const avatar = authorAvatar || comment.avatar || '/default-avatar.svg';
 
   return (
     <article className="w-full p-3 bg-white border border-slate-200 rounded-md">
