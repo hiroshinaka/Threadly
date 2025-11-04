@@ -177,17 +177,6 @@ export default function Header({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setShowProfileMenu(false);
-                            navigate('/subreddits');
-                          }}
-                          className="block text-left w-full rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                          role="menuitem"
-                        >
-                          Categories 
-                        </button>
-                        <button
-                          type="button"
                           onClick={async () => {
                             try {
                               await logout();
