@@ -311,13 +311,49 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
                         }
                       });
 
-                      return rendered;
-                    })()
-                  )}
-                </ul>
-              </div>
-            </>
-          )}
+                      if (parentKey) {
+                      // prefer rendering under parent once
+                      if (seenGroups.has(parentKey)) return;
+                      seenGroups.add(parentKey);
+                      // resolve parent object if available
+                      const parentCat = byId.get(String(parentKey)) || bySlug.get(String(parentKey));
+                      const childrenList = children.get(String(parentKey)) || children.get(String(parentKey)) || [];
+                      rendered.push(
+                        <li key={parentKey}>
+                          <div className="block rounded-lg px-2 py-1 text-sm font-medium text-gray-600">
+                            {parentCat ? (
+                              <button onClick={() => { onOpenCategory && onOpenCategory(parentCat); }} className="font-medium text-slate-700 hover:underline">{parentCat.name}</button>
+                            ) : (
+                              <span className="font-medium text-slate-700">{String(parentKey)}</span>
+                            )}
+                          </div>
+                          <ul className="pl-4 mt-1">
+                            {childrenList.map(ch => (
+                              <li key={ch.categories_id || ch.slug}>
+                                <button onClick={() => { onOpenCategory && onOpenCategory(ch); }} className="block rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                  {ch.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      );
+                    } else {
+                      // no parent, render directly
+                      if (seenGroups.has(keyForCat)) return;
+                      seenGroups.add(keyForCat);
+                      rendered.push(
+                        <li key={keyForCat}>
+                          <button
+                            onClick={() => { if (onOpenCategory) { onOpenCategory(cat); } else { navigate(`/${encodeURIComponent(keyForCat)}`); } }}
+                            className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors text-left w-full"
+                          >
+                            {cat.name}
+                          </button>
+                        </li>
+                      );
+                    }
+                  });
 
           <div id="recent-posts" className="px-2">
             <hr className="my-4" />
