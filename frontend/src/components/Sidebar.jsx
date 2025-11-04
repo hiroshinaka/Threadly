@@ -199,79 +199,117 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
             )}
           </ul>
 
-          <hr className="my-4" />
-
-          {/* Dedicated section for creation actions */}
           {loggedIn && (
-            <div className="space-y-2">
-              <button onClick={() => { onOpenThread && onOpenThread(); }} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-              <i class="fa-solid fa-pencil"></i> New Thread
-              </button>
-              <button onClick={() => { onOpenCategory && onOpenCategory(); }} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-              <i class="fa-solid fa-pencil"></i> New Category
-              </button>
-            </div>
-          )}
+            <>
+              <hr className="my-4" />
+              <div className="space-y-2">
+                <button onClick={() => { onOpenThread && onOpenThread(); }} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                  <i className="fa-solid fa-pencil"></i> New Thread
+                </button>
+                <button onClick={() => { onOpenCategory && onOpenCategory(); }} className="w-full text-left block rounded-lg px-2 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                  <i className="fa-solid fa-pencil"></i> New Category
+                </button>
+              </div>
+              <hr className="my-4" />
+              <div id="subscribed-categories" className="px-2">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Subscribed Categories</h3>
+                <ul className="space-y-1 text-sm text-gray-700">
+                  {subsLoading ? (
+                    <li className="text-gray-400">Loading...</li>
+                  ) : (subscriptions.length === 0) ? (
+                    <li className="text-gray-400">No subscribed categories</li>
+                  ) : (
+                    (() => {
+                      // Build maps for quick lookup
+                      const byId = new Map();
+                      const bySlug = new Map();
+                      categories.forEach(c => {
+                        const idKey = c.categories_id || c.category_id || String(c.id || '');
+                        if (idKey) byId.set(String(idKey), c);
+                        if (c.slug) bySlug.set(String(c.slug), c);
+                      });
 
-          <hr className="my-4" />
-          <div id="subscribed-categories" className="px-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Subscribed Categories</h3>
-            <ul className="space-y-1 text-sm text-gray-700">
-              {subsLoading ? (
-                <li className="text-gray-400">Loading...</li>
-              ) : (subscriptions.length === 0) ? (
-                <li className="text-gray-400">No subscribed categories</li>
-              ) : (
-                (() => {
-                  // Build maps for quick lookup
-                  const byId = new Map();
-                  const bySlug = new Map();
-                  categories.forEach(c => {
-                    const idKey = c.categories_id || c.category_id || String(c.id || '');
-                    if (idKey) byId.set(String(idKey), c);
-                    if (c.slug) bySlug.set(String(c.slug), c);
-                  });
+                      // Build parent -> children map using heuristics (explicit parent fields or slash-delimited slugs)
+                      const children = new Map();
+                      const parentFor = new Map();
+                      categories.forEach(c => {
+                        // try explicit parent id fields
+                        const parentId = c.parent_id || c.parent_categories_id || c.parentCategoryId || c.parent || c.parent_categories || null;
+                        if (parentId) {
+                          parentFor.set(c.categories_id || c.category_id || c.slug, parentId);
+                          const key = String(parentId);
+                          children.set(key, (children.get(key) || []).concat(c));
+                          return;
+                        }
+                        // try slug based hierarchy: 'parent/child'
+                        if (c.slug && c.slug.includes('/')) {
+                          const parts = c.slug.split('/').map(p => p.trim()).filter(Boolean);
+                          if (parts.length >= 2) {
+                            const parentSlug = parts.slice(0, parts.length - 1).join('/');
+                            parentFor.set(c.slug, parentSlug);
+                            children.set(parentSlug, (children.get(parentSlug) || []).concat(c));
+                            return;
+                          }
+                        }
+                        // no parent detected
+                      });
 
-                  // Build parent -> children map using heuristics (explicit parent fields or slash-delimited slugs)
-                  const children = new Map();
-                  const parentFor = new Map();
-                  categories.forEach(c => {
-                    // try explicit parent id fields
-                    const parentId = c.parent_id || c.parent_categories_id || c.parentCategoryId || c.parent || c.parent_categories || null;
-                    if (parentId) {
-                      parentFor.set(c.categories_id || c.category_id || c.slug, parentId);
-                      const key = String(parentId);
-                      children.set(key, (children.get(key) || []).concat(c));
-                      return;
-                    }
-                    // try slug based hierarchy: 'parent/child'
-                    if (c.slug && c.slug.includes('/')) {
-                      const parts = c.slug.split('/').map(p => p.trim()).filter(Boolean);
-                      if (parts.length >= 2) {
-                        const parentSlug = parts.slice(0, parts.length - 1).join('/');
-                        parentFor.set(c.slug, parentSlug);
-                        children.set(parentSlug, (children.get(parentSlug) || []).concat(c));
-                        return;
-                      }
-                    }
-                    // no parent detected
-                  });
+                      // Now, for each subscription build display rows. Group by parent when possible.
+                      const rendered = [];
+                      const seenGroups = new Set();
 
-                  // Now, for each subscription build display rows. Group by parent when possible.
-                  const rendered = [];
-                  const seenGroups = new Set();
+                      subscriptions.forEach(sub => {
+                        const catId = String(sub.category_id || sub.categories_id || sub.categoryId || sub.id || '');
+                        // find category by id or slug
+                        let cat = byId.get(catId) || bySlug.get(catId) || null;
+                        // some subscriptions may hold slug instead of id
+                        if (!cat && sub.slug) cat = bySlug.get(String(sub.slug));
+                        if (!cat) return; // skip if we can't resolve
 
-                  subscriptions.forEach(sub => {
-                    const catId = String(sub.category_id || sub.categories_id || sub.categoryId || sub.id || '');
-                    // find category by id or slug
-                    let cat = byId.get(catId) || bySlug.get(catId) || null;
-                    // some subscriptions may hold slug instead of id
-                    if (!cat && sub.slug) cat = bySlug.get(String(sub.slug));
-                    if (!cat) return; // skip if we can't resolve
+                        // determine parent key
+                        const keyForCat = cat.categories_id || cat.category_id || cat.slug;
+                        const parentKey = parentFor.get(keyForCat) || parentFor.get(cat.slug) || (cat.slug && cat.slug.includes('/') ? cat.slug.split('/').slice(0, -1).join('/') : null);
 
-                    // determine parent key
-                    const keyForCat = cat.categories_id || cat.category_id || cat.slug;
-                    const parentKey = parentFor.get(keyForCat) || parentFor.get(cat.slug) || (cat.slug && cat.slug.includes('/') ? cat.slug.split('/').slice(0, -1).join('/') : null);
+                        if (parentKey) {
+                          // prefer rendering under parent once
+                          if (seenGroups.has(parentKey)) return;
+                          seenGroups.add(parentKey);
+                          // resolve parent object if available
+                          const parentCat = byId.get(String(parentKey)) || bySlug.get(String(parentKey));
+                          const childrenList = children.get(String(parentKey)) || children.get(String(parentKey)) || [];
+                          rendered.push(
+                            <li key={parentKey}>
+                              <div className="block rounded-lg px-2 py-1 text-sm font-medium text-gray-600">
+                                {parentCat ? (
+                                  <button onClick={() => { onOpenCategory && onOpenCategory(parentCat); }} className="font-medium text-slate-700 hover:underline">{parentCat.name}</button>
+                                ) : (
+                                  <span className="font-medium text-slate-700">{String(parentKey)}</span>
+                                )}
+                              </div>
+                              <ul className="pl-4 mt-1">
+                                {childrenList.map(ch => (
+                                  <li key={ch.categories_id || ch.slug}>
+                                    <button onClick={() => { onOpenCategory && onOpenCategory(ch); }} className="block rounded-lg px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                      {ch.name}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          );
+                        } else {
+                          // no parent, render directly
+                          if (seenGroups.has(keyForCat)) return;
+                          seenGroups.add(keyForCat);
+                          rendered.push(
+                            <li key={keyForCat}>
+                              <button onClick={() => { onOpenCategory && onOpenCategory(cat); }} className="block rounded-lg px-2 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
+                                {cat.name}
+                              </button>
+                            </li>
+                          );
+                        }
+                      });
 
                       if (parentKey) {
                       // prefer rendering under parent once
@@ -317,11 +355,6 @@ export default function Sidebar({ onOpenThread, onOpenCategory }) {
                     }
                   });
 
-                  return rendered;
-                })()
-              )}
-            </ul>
-          </div>
           <div id="recent-posts" className="px-2">
             <hr className="my-4" />
             <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Recent Posts</h3>

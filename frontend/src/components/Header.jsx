@@ -152,7 +152,7 @@ export default function Header({
                   >
                     <span className="sr-only">Toggle dashboard menu</span>
                     <img
-                      src={user?.image_url || "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop"}
+                      src={user?.image_url || "/default-avatar.svg"}
                       alt={user ? user.username : "User"}
                       className="h-10 w-10 rounded-full object-cover"
                     />
@@ -174,17 +174,6 @@ export default function Header({
                           role="menuitem"
                         >
                           Profile
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowProfileMenu(false);
-                            navigate('/subreddits');
-                          }}
-                          className="block text-left w-full rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                          role="menuitem"
-                        >
-                          Categories 
                         </button>
                         <button
                           type="button"

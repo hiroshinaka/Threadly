@@ -155,6 +155,12 @@ function CommentNode(props) {
                   >
                     {collapsed ? '+' : '−'}
                   </button>
+                  {/* Profile picture to the left of username */}
+                  <img
+                    src={comment.image_url || comment.avatar || '/default-avatar.svg'}
+                    alt={comment.username || 'User'}
+                    className="h-7 w-7 rounded-full object-cover mr-2 border border-gray-200 bg-white"
+                  />
                   {comment.username || comment.author_id} •{' '}
                   <time dateTime={comment.created_at}>{new Date(comment.created_at).toISOString().slice(0, 10)}</time>
                 </div>
@@ -641,8 +647,17 @@ function ThreadView() {
               }} className="ml-2 px-2 py-1 text-xs rounded bg-rose-50 text-rose-700 border border-rose-100">Delete Thread</button>
             )}
           </div>
-          <div className="text-sm text-slate-500 mb-4">
-            by {thread.author} • <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time> •
+          <div className="text-sm text-slate-500 mb-4 flex items-center gap-2">
+            <img
+              src={thread.image_url || '/default-avatar.svg'}
+              alt={thread.author || 'User'}
+              className="w-7 h-7 rounded-full object-cover border border-slate-200 bg-white"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+            <span>by {thread.author}</span>
+            <span>•</span>
+            <time dateTime={thread.created_at || thread.createdAt}>{new Date(thread.created_at || thread.createdAt).toISOString().slice(0,10)}</time>
+            <span>•</span>
             <span className="text-blue-500 ml-1"><Link to={`/t/${thread.category_slug || thread.category_name || 'uncategorized'}`}>t/{thread.category_name || 'Uncategorized'}</Link></span>
             <button onClick={toggleSubscription} disabled={subsLoading} className={`ml-3 px-2 py-1 text-xs rounded ${isSubscribed ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
               {subsLoading ? '...' : (isSubscribed ? 'Unsubscribe' : 'Subscribe')}

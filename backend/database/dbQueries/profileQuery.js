@@ -2,15 +2,17 @@ let fetchUserPosts = async (pool, userId, limit = 200) => {
 	const [rows] = await pool.query(
 		`SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.view_count,
 			c.name AS category_name, c.slug AS category_slug,
-			COALESCE(comments.comment_count, 0) AS comment_count
-	 	 FROM thread t
-	 	 LEFT JOIN categories c ON t.category_id = c.categories_id
+			COALESCE(comments.comment_count, 0) AS comment_count,
+			u.image_url AS image_url, u.username AS author
+		 FROM thread t
+		 LEFT JOIN categories c ON t.category_id = c.categories_id
+		 LEFT JOIN user u ON t.author_id = u.id
 		 LEFT JOIN (
 			 SELECT thread_id, COUNT(*) AS comment_count FROM comment GROUP BY thread_id
 		 ) AS comments ON comments.thread_id = t.thread_id
-	 	 WHERE t.author_id = ?
-	 	 ORDER BY t.created_at DESC
-	 	 LIMIT ?`,
+		 WHERE t.author_id = ?
+		 ORDER BY t.created_at DESC
+		 LIMIT ?`,
 		[userId, limit]
 	);
 	return rows || [];

@@ -39,7 +39,7 @@ let fetchThreadFrontPage = async (pool, limit = 50) => {
     const [rows] = await pool.query(
         `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.view_count,
                 c.name AS category_name, c.slug AS category_slug, comments.comment_count,
-                t.author_id, u.username AS author
+                t.author_id, u.username AS author, u.image_url AS image_url
          FROM thread t
          LEFT JOIN user u ON t.author_id = u.id
          LEFT JOIN categories c ON t.category_id = c.categories_id
@@ -104,7 +104,7 @@ let fetchComments = async (pool, thread_id, userId = null) => {
         : '(SELECT comment_id, COUNT(*) AS karma FROM comment_reaction GROUP BY comment_id)';
 
     const [rows] = await pool.query(
-        `SELECT c.comment_id, c.text, c.created_at, c.parent_id, c.author_id, u.username,
+        `SELECT c.comment_id, c.text, c.created_at, c.parent_id, c.author_id, u.username, u.image_url,
                 COALESCE(cr.karma, 0) AS karma
          FROM comment c
          JOIN user u ON c.author_id = u.id
@@ -157,7 +157,7 @@ let fetchThreadsByCategoryIds = async (pool, categoryIds = [], limit = 50) => {
     const [rows] = await pool.query(
         `SELECT t.thread_id, t.slug AS thread_slug, t.title, t.body_text, t.karma, t.is_active, t.created_at, t.category_id, t.view_count,
                         c.name AS category_name, c.slug AS category_slug, comments.comment_count,
-                        t.author_id, u.username AS author
+                        t.author_id, u.username AS author, u.image_url AS image_url
          FROM thread t
          LEFT JOIN user u ON t.author_id = u.id
          LEFT JOIN categories c ON t.category_id = c.categories_id

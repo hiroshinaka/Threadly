@@ -15,7 +15,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
 
   const fileInputRef = useRef(null);
-  const defaultAvatar = 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1770&auto=format&fit=crop';
+  const defaultAvatar = '/default-avatar.svg';
   const [userAvatar, setUserAvatar] = useState(user?.image_url || defaultAvatar);
 
   useEffect(() => {
