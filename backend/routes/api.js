@@ -462,6 +462,7 @@ router.use('/threads', threadsRouter);
 router.post('/threads', upload.single('image'), async (req, res) => {
 	try {
 		const { title, text, category_id } = req.body;
+		const MAX_TITLE_LENGTH = 120; // server-side guard for title length
 		//Check user is logged in 
 		let author_id = null;
 		if (req.session && req.session.user && req.session.user.id) {
@@ -472,7 +473,6 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 		//Check for empty fields
 		if (!title || !category_id) {
 			return res.status(400).json({ ok: false, message: 'title and category_id are required.' });
-				const MAX_TITLE_LENGTH = 120;
 		}
 
 		// fetch category
