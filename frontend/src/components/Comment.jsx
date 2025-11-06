@@ -24,7 +24,10 @@ export default function Comment({ comment, authorName, authorAvatar }) {
             <div className="text-xs text-slate-500">{rel}</div>
           </div>
 
-          <p className="mt-1 text-slate-700">{comment.text}</p>
+          {/* truncate long comments for profile list views */}
+          <p className="mt-1 text-slate-700">
+            {typeof comment.text === 'string' && comment.text.length > 250 ? comment.text.slice(0, 247) + '\u2026' : comment.text}
+          </p>
 
           <div className="mt-3 flex items-center gap-3 text-sm text-slate-500">
             <div className="flex items-center gap-2">

@@ -134,7 +134,10 @@ export default function ThreadCard({ thread }) {
               <time dateTime={dt.toISOString()}>{rel}</time>
             </div>
 
-            <h3 className="text-slate-900 text-lg font-medium">{thread.title}</h3>
+            {/* Limit title length and ensure it truncates visually */}
+            <h3 className="text-slate-900 text-lg font-medium truncate" style={{ maxWidth: '100%' }}>
+              {typeof thread.title === 'string' ? (thread.title.length > 100 ? thread.title.slice(0, 97) + '\u2026' : thread.title) : thread.title}
+            </h3>
 
             {renderBody(thread.body_text, thread.media)}
 
