@@ -37,7 +37,7 @@ export default function Comment({ comment, authorName, authorAvatar }) {
           {removedMeta ? (
             <div className="mt-1 text-slate-500 italic">{
               removedMeta.reason ? (`[removed] ${removedMeta.reason}`) : '[removed]'
-            }{removedMeta.removed_by ? ` — removed by ${removedMeta.removed_by}` : ''}</div>
+            }{removedMeta.removed_by ? ` — removed by user: ${removedMeta.removed_by}` : ''}</div>
           ) : (
             <p className="mt-1 text-slate-700">
               {typeof comment.text === 'string' && comment.text.length > 200 ? comment.text.slice(0, 247) + '\u2026' : comment.text}
