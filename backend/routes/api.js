@@ -33,27 +33,27 @@ router.post('/echo', (req, res) => {
 router.post('/signup', async (req, res) => {
 	try {
 		const { username, password } = req.body;
-
+		
 		if (!username || !password) {
 			return res.status(400).json({ ok: false, message: 'Username and password required.' });
 		}
-
+		
 		const schema = joi.object({
 			username: joi.string().alphanum().min(3).max(20).required(),
 			password: joi
-				.string()
-				.min(10)
-				.max(30)
-				.pattern(
-					new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=[\\]{};:"\\\\|,.<>/?]).+$')
-				)
-				.required()
-				.messages({
-					'string.pattern.base':
-						'Password must include uppercase, lowercase, number, and special character.',
-				}),
+			.string()
+			.min(10)
+			.max(30)
+			.pattern(
+				new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=[\\]{};:"\\\\|,.<>/?]).+$')
+			)
+			.required()
+			.messages({
+				'string.pattern.base':
+				'Password must include uppercase, lowercase, number, and special character.',
+			}),
 		});
-
+		
 		const { error } = schema.validate({ username, password });
 		if (error) {
 			return res.status(400).json({ ok: false, message: error.details[0].message });
@@ -62,11 +62,11 @@ router.post('/signup', async (req, res) => {
 		if (existingUser) {
 			return res.status(409).json({ ok: false, message: 'Username already taken.' });
 		}
-
+		
         const default_role_id = 2;
 		const hashedPassword = await bcrypt.hash(password, saltRounds);
 		await createUser(pool, username, hashedPassword, default_role_id);
-
+		
 		res.json({ ok: true, message: 'Signup successful!' });
 	} catch (err) {
 		console.error(err);
@@ -75,39 +75,39 @@ router.post('/signup', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
+	try {
+		const { username, password } = req.body;
+		
         if (!username || !password) {
-            return res.status(400).json({ ok: false, message: 'Username and password required.' });
+			return res.status(400).json({ ok: false, message: 'Username and password required.' });
         }
-
+		
         const user = await getUserWithPassword(pool, username);
         
         if (!user) {
-            return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
+			return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
         }
-
+		
         const isPasswordValid = await bcrypt.compare(password, user.password_hash);
         
         if (!isPasswordValid) {
-            return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
+			return res.status(401).json({ ok: false, message: 'Invalid username or password.' });
         }
-
+		
         // session data here 
         req.session.user = { 
-            id: user.id,
+			id: user.id,
             username: user.username,
             role_id: user.role_id
         };
-
+		
         res.json({ 
-            ok: true, 
+			ok: true, 
             message: 'Login successful!', 
             user: req.session.user 
         });
     } catch (err) {
-        console.error('Login error:', err);
+		console.error('Login error:', err);
         res.status(500).json({ ok: false, message: 'Internal server error.' });
     }
 });
@@ -154,13 +154,13 @@ router.post('/profile/avatar', upload.single('avatar'), async (req, res) => {
 		if (!req.session || !req.session.user || !req.session.user.id) {
 			return res.status(401).json({ ok: false, message: 'Unauthorized' });
 		}
-
+		
 		const userId = req.session.user.id;
-
+		
 		if (!req.file) {
 			return res.status(400).json({ ok: false, message: 'No file uploaded' });
 		}
-
+		
 		// upload buffer to cloudinary
 		const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 		const uploadResult = await cloudinary.uploader.upload(dataUri, {
@@ -168,7 +168,7 @@ router.post('/profile/avatar', upload.single('avatar'), async (req, res) => {
 			resource_type: 'image',
 			transformation: [{ width: 800, height: 800, crop: 'limit' }]
 		});
-
+		
 		// persist to DB
 		const updatedUser = await updateUserImage(pool, userId, uploadResult.secure_url);
 
@@ -176,7 +176,7 @@ router.post('/profile/avatar', upload.single('avatar'), async (req, res) => {
 		if (req.session && req.session.user) {
 			req.session.user.image_url = updatedUser.image_url;
 		}
-
+		
 		res.json({ ok: true, user: updatedUser });
 	} catch (err) {
 		console.error('Avatar upload failed', err);
@@ -185,9 +185,9 @@ router.post('/profile/avatar', upload.single('avatar'), async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) {
-            console.error('Logout error:', err);
+	req.session.destroy((err) => {
+		if (err) {
+			console.error('Logout error:', err);
             return res.status(500).json({ ok: false, message: 'Failed to logout.' });
         }
         res.clearCookie('connect.sid'); // Clear the session cookie
@@ -197,7 +197,7 @@ router.post('/logout', (req, res) => {
 
 router.post('/categories', async (req, res) => {
 	const { name, description , text_allow , photo_allow } = req.body;
-
+	
 	// choose admin_id from session user if available, otherwise default to 1 (assumes seeded admin user)
 	let admin_id;
 	if (req.session && req.session.user && req.session.user.id){
@@ -205,12 +205,12 @@ router.post('/categories', async (req, res) => {
 	} else {
 		return res.status(401).json({ ok: false, message: 'Unauthorized: Please log in to create a category.' });
 	}
-
-
+	
+	
 	try {
 		const checkExistingThreads = await searchCategoriesByName(pool, name.trim());
         if (checkExistingThreads.length > 0) {
-            return res.status(409).json({ ok: false, message: 'Category with this name already exists.' });
+			return res.status(409).json({ ok: false, message: 'Category with this name already exists.' });
         }
 		const created = await createCategory(pool, name.trim(), admin_id, Number(text_allow) ? 1 : 0, Number(photo_allow) ? 1 : 0, description ? description.trim() : null);
 		res.status(201).json({ ok: true, category: created });
@@ -218,7 +218,7 @@ router.post('/categories', async (req, res) => {
 		console.error('Error creating category', err);
 		res.status(500).json({ ok: false, message: 'Database error' });
 	}
-
+	
 });
 // GET /categories - list categories
 router.get('/categories', async (req, res) => {
@@ -238,10 +238,10 @@ router.get('/categories/:id', async (req, res) => {
 		// try to match either by numeric id or by slug
 		const [rows] = await pool.query(
 			`SELECT c.categories_id, c.name, c.text_allow, c.photo_allow, c.slug, c.description, c.admin_id, u.username AS admin_username
-			 FROM categories c
-			 LEFT JOIN user u ON u.id = c.admin_id
-			 WHERE c.categories_id = ? OR c.slug = ?
-			 LIMIT 1`,
+			FROM categories c
+			LEFT JOIN user u ON u.id = c.admin_id
+			WHERE c.categories_id = ? OR c.slug = ?
+			LIMIT 1`,
 			[idOrSlug, idOrSlug]
 		);
 		if (!rows || !rows.length) return res.status(404).json({ ok: false, message: 'Category not found' });
@@ -287,10 +287,10 @@ router.delete('/categories/:id', async (req, res) => {
 	try {
 		const userId = req.session && req.session.user && req.session.user.id;
 		if (!userId) return res.status(401).json({ ok: false, message: 'Please log in to delete categories' });
-
+		
 		const categoryId = Number(req.params.id);
 		if (!categoryId) return res.status(400).json({ ok: false, message: 'Invalid category id' });
-
+		
 		// ensure category exists and get its admin/creator
 		const [crows] = await pool.query('SELECT categories_id, admin_id FROM categories WHERE categories_id = ?', [categoryId]);
 		if (!crows || !crows.length) return res.status(404).json({ ok: false, message: 'Category not found' });
@@ -300,20 +300,20 @@ router.delete('/categories/:id', async (req, res) => {
 		const isAdmin = requesterRole === 1;
 		const isCreator = Number(category.admin_id) === Number(userId);
 		if (!isAdmin && !isCreator) return res.status(403).json({ ok: false, message: 'Not authorized to delete this category' });
-
+		
 		const conn = await pool.getConnection();
 		let threadIds = [];
 		let publicIds = [];
 		try {
 			await conn.beginTransaction();
-
+			
 			// find threads in this category
 			const [trows] = await conn.query('SELECT thread_id FROM thread WHERE category_id = ?', [categoryId]);
 			threadIds = trows && trows.length ? trows.map(r => r.thread_id) : [];
-
+			
 			if (threadIds.length) {
 				const ph = threadIds.map(() => '?').join(',');
-
+				
 				// collect public_ids for Cloudinary cleanup (best-effort)
 				try {
 					const [mrows] = await conn.query(`SELECT public_id FROM thread_media WHERE thread_id IN (${ph})`, threadIds);
@@ -321,32 +321,32 @@ router.delete('/categories/:id', async (req, res) => {
 				} catch (e) {
 					console.error('Failed to fetch thread media public ids', e);
 				}
-
+				
 				// delete comment reactions for comments in these threads
 				await conn.query(`DELETE cr FROM comment_reaction cr JOIN comment c ON cr.comment_id = c.comment_id WHERE c.thread_id IN (${ph})`, threadIds);
-
+				
 				// delete comments for these threads
 				await conn.query(`DELETE FROM comment WHERE thread_id IN (${ph})`, threadIds);
-
+				
 				// delete thread reactions/votes
 				await conn.query(`DELETE FROM thread_reaction WHERE thread_id IN (${ph})`, threadIds);
-
+				
 				// delete media entries for threads
 				await conn.query(`DELETE FROM thread_media WHERE thread_id IN (${ph})`, threadIds);
-
+				
 				// delete view events for threads
 				await conn.query(`DELETE FROM view_events WHERE thread_id IN (${ph})`, threadIds);
-
+				
 				// finally delete the threads themselves
 				await conn.query(`DELETE FROM thread WHERE thread_id IN (${ph})`, threadIds);
 			}
-
+			
 			// delete subscriptions to this category
 			await conn.query('DELETE FROM subscription WHERE category_id = ?', [categoryId]);
 
 			// delete the category row
 			await conn.query('DELETE FROM categories WHERE categories_id = ?', [categoryId]);
-
+			
 			await conn.commit();
 		} catch (e) {
 			try { await conn.rollback(); } catch (er) { }
@@ -354,7 +354,7 @@ router.delete('/categories/:id', async (req, res) => {
 		} finally {
 			conn.release();
 		}
-
+		
 		// After commit: attempt to delete Cloudinary assets for any collected public_ids (best-effort)
 		if (publicIds.length) {
 			try {
@@ -365,7 +365,7 @@ router.delete('/categories/:id', async (req, res) => {
 				console.error('Cloudinary deletion error', e);
 			}
 		}
-
+		
 		res.json({ ok: true, category_id: categoryId, deleted_threads: threadIds.length, attempted_media_deleted: publicIds.length });
 	} catch (err) {
 		console.error('Delete category error', err);
@@ -393,15 +393,15 @@ router.get('/search', async (req, res) => {
 		const limit = Math.min(100, parseInt(req.query.limit, 10) || 20);
 		const offset = parseInt(req.query.offset, 10) || 0;
 		if (!q) return res.status(400).json({ ok: false, message: 'q (query) is required' });
-
+		
 		// Fulltext search works best for queries of length >= 3. For very short queries use LIKE fallback.
 		let rows = [];
 		if (q.length >= 3) {
 			const sql = `SELECT thread_id, title, slug, body_text, karma, created_at, category_id, MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
-						 FROM thread
-						 WHERE MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE)
-						 ORDER BY score DESC
-						 LIMIT ? OFFSET ?`;
+			FROM thread
+			WHERE MATCH(title, body_text) AGAINST(? IN NATURAL LANGUAGE MODE)
+			ORDER BY score DESC
+			LIMIT ? OFFSET ?`;
 			const [r] = await pool.query(sql, [q, q, limit, offset]);
 			rows = r;
 		}
@@ -409,37 +409,37 @@ router.get('/search', async (req, res) => {
 		if (rows.length === 0) {
 			const likeQ = `%${q}%`;
 			const sql2 = `SELECT thread_id, title, slug, body_text, karma, created_at, category_id
-													FROM thread
-													WHERE title LIKE ? OR body_text LIKE ?
-													ORDER BY created_at DESC
-													LIMIT ? OFFSET ?`;
+			FROM thread
+			WHERE title LIKE ? OR body_text LIKE ?
+			ORDER BY created_at DESC
+			LIMIT ? OFFSET ?`;
 			const [r2] = await pool.query(sql2, [likeQ, likeQ, limit, offset]);
 			rows = r2;
 		}
-
-			// --- also search comments (returns comment matches separately) ---
-			let commentRows = [];
-			try {
-				if (q.length >= 3) {
-					const csql = `SELECT comment_id, text, u.username AS author_username, thread_id, author_id, created_at, MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
-												FROM comment
-												JOIN user u ON
-												author_id = u.id
+		
+		// --- also search comments (returns comment matches separately) ---
+		let commentRows = [];
+		try {
+			if (q.length >= 3) {
+				const csql = `SELECT comment_id, text, u.username AS author_username, thread_id, author_id, created_at, MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE) AS score
+				FROM comment
+				JOIN user u ON
+				author_id = u.id
 												WHERE MATCH(text) AGAINST(? IN NATURAL LANGUAGE MODE)
 												ORDER BY score DESC
 												LIMIT ? OFFSET ?`;
-					const [cr] = await pool.query(csql, [q, q, limit, offset]);
-					commentRows = cr;
-				}
-				if (commentRows.length === 0) {
-					const likeQ = `%${q}%`;
+												const [cr] = await pool.query(csql, [q, q, limit, offset]);
+												commentRows = cr;
+											}
+											if (commentRows.length === 0) {
+												const likeQ = `%${q}%`;
 					const csql2 = `SELECT comment_id, u.username AS author_username, text, thread_id, author_id, created_at
-												 FROM comment
-												 JOIN user u ON
-												 author_id = u.id
-												 WHERE text LIKE ?
-												 ORDER BY created_at DESC
-												 LIMIT ? OFFSET ?`;
+					FROM comment
+					JOIN user u ON
+					author_id = u.id
+					WHERE text LIKE ?
+					ORDER BY created_at DESC
+					LIMIT ? OFFSET ?`;
 					const [cr2] = await pool.query(csql2, [likeQ, limit, offset]);
 					commentRows = cr2;
 				}
@@ -448,56 +448,56 @@ router.get('/search', async (req, res) => {
 				// don't fail the entire search if comments can't be searched for any reason
 				commentRows = [];
 			}
-
+			
 			res.json({ ok: true, query: q, thread_count: rows.length, threads: rows, comment_count: commentRows.length, comments: commentRows });
-	} catch (err) {
-		console.error('Search error', err);
-		res.status(500).json({ ok: false, message: 'Search failed' });
-	}
-});
-// Mount the threads router (provides GET /api/threads and thread detail endpoints)
-
-router.use('/threads', threadsRouter);
-
-router.post('/threads', upload.single('image'), async (req, res) => {
-	try {
-		const { title, text, category_id } = req.body;
-		const MAX_TITLE_LENGTH = 120; // server-side guard for title length
-		//Check user is logged in 
-		let author_id = null;
-		if (req.session && req.session.user && req.session.user.id) {
-			author_id = req.session.user.id;
-		} else {
-			return res.status(401).json({ ok: false, message: 'Unauthorized: Please log in to create a thread.' });
+		} catch (err) {
+			console.error('Search error', err);
+			res.status(500).json({ ok: false, message: 'Search failed' });
 		}
-		//Check for empty fields
-		if (!title || !category_id) {
-			return res.status(400).json({ ok: false, message: 'title and category_id are required.' });
-		}
+	});
+	// Mount the threads router (provides GET /api/threads and thread detail endpoints)
+	
+	router.use('/threads', threadsRouter);
 
-		// fetch category
-	const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ?', [category_id]);
-		if (!catRows.length) return res.status(400).json({ ok: false, message: 'Invalid category' });
-		const category = catRows[0];
+	router.post('/threads', upload.single('image'), async (req, res) => {
+		try {
+			const { title, text, category_id } = req.body;
+			const MAX_TITLE_LENGTH = 120; // server-side guard for title length
+			//Check user is logged in 
+			let author_id = null;
+			if (req.session && req.session.user && req.session.user.id) {
+				author_id = req.session.user.id;
+			} else {
+				return res.status(401).json({ ok: false, message: 'Unauthorized: Please log in to create a thread.' });
+			}
+			//Check for empty fields
+			if (!title || !category_id) {
+				return res.status(400).json({ ok: false, message: 'title and category_id are required.' });
+			}
+			
+			// fetch category
+			const [catRows] = await pool.query('SELECT categories_id, name, text_allow, photo_allow FROM categories WHERE categories_id = ?', [category_id]);
+			if (!catRows.length) return res.status(400).json({ ok: false, message: 'Invalid category' });
+			const category = catRows[0];
 
-	let bodyToSave = null;
-	let uploadResult = null;
-
-		if (req.file) {
-
+			let bodyToSave = null;
+			let uploadResult = null;
+			
+			if (req.file) {
+				
 				if (typeof title === 'string' && title.trim().length > MAX_TITLE_LENGTH) {
 					return res.status(400).json({ ok: false, message: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.` });
 				}
-			if (!category.photo_allow) {
-				return res.status(400).json({ ok: false, message: 'This category does not allow image posts' });
-			}
-			// upload buffer to cloudinary
-			const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-			uploadResult = await cloudinary.uploader.upload(dataUri, {
-				folder: 'threadly',
+				if (!category.photo_allow) {
+					return res.status(400).json({ ok: false, message: 'This category does not allow image posts' });
+				}
+				// upload buffer to cloudinary
+				const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+				uploadResult = await cloudinary.uploader.upload(dataUri, {
+					folder: 'threadly',
 				resource_type: 'image',
 			});
-
+			
 			// Store the original, full-size image URL so the thread view can display the full image.
 			let imageBody = { type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
 			if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) {
@@ -509,35 +509,35 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 			if (!text || text.trim().length === 0) return res.status(400).json({ ok: false, message: 'Text body is required for text posts' });
 			bodyToSave = text.trim();
 		}
-	// Determine searchable plain-text for body_text column (used by FULLTEXT search)
-	let bodyText = null;
-	try {
+		// Determine searchable plain-text for body_text column (used by FULLTEXT search)
+		let bodyText = null;
+		try {
 		const parsed = JSON.parse(bodyToSave);
 		if (parsed && typeof parsed.text === 'string' && parsed.text.trim().length > 0) bodyText = parsed.text.trim();
 	} catch (e) {
 		// not JSON — treat bodyToSave as plain text
 		if (typeof bodyToSave === 'string' && bodyToSave.trim().length > 0) bodyText = bodyToSave.trim();
 	}
-
+	
 	//Insert thread into database (pass body_text so it's searchable)
-		const created = await createThread(pool, title.trim(), author_id, category.categories_id, bodyText);
-		// if we uploaded an image, persist it to thread_media
-				if (req.file) {
-					try {
-						const media = { media_type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
-						if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) media.caption = text.trim();
-						await insertThreadMedia(pool, created.thread_id, media);
-					} catch (e) {
-						console.error('Failed to insert thread media', e);
-					}
-				}
-
-		// createThread returns { thread_id, slug }
-		res.status(201).json({ ok: true, thread_id: created.thread_id, slug: created.slug });
-	} catch (err) {
-		console.error('Error creating thread', err);
-		res.status(500).json({ ok: false, message: 'Database error' });
+	const created = await createThread(pool, title.trim(), author_id, category.categories_id, bodyText);
+	// if we uploaded an image, persist it to thread_media
+	if (req.file) {
+		try {
+			const media = { media_type: 'image', url: uploadResult.secure_url, public_id: uploadResult.public_id };
+			if (typeof text === 'string' && text.trim().length > 0 && category.text_allow) media.caption = text.trim();
+			await insertThreadMedia(pool, created.thread_id, media);
+		} catch (e) {
+			console.error('Failed to insert thread media', e);
+		}
 	}
+	
+	// createThread returns { thread_id, slug }
+	res.status(201).json({ ok: true, thread_id: created.thread_id, slug: created.slug });
+} catch (err) {
+	console.error('Error creating thread', err);
+	res.status(500).json({ ok: false, message: 'Database error' });
+}
 });
 
 
@@ -547,23 +547,23 @@ router.post('/threads/:id/view', async (req, res) => {
 	try {
 		const threadId = Number(req.params.id);
 		if (!threadId) return res.status(400).json({ ok: false, message: 'Invalid thread id' });
-
+		
 		// determine identifiers for dedupe
 		const viewer_id = req.session && req.session.user && req.session.user.id ? req.session.user.id : null;
 		const session_id = req.sessionID || (req.cookies && req.cookies['connect.sid']) || null;
 		const ipHash = hashIp(req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress);
-
+		
 		// Decide whether to insert a raw event for auditing/dedupe
 		const should = await shouldRecordView(pool, { thread_id: threadId, viewer_id, session_id, ip_hash: ipHash, windowMinutes: 60 });
-
+		
 		// Always increment the cached counter so the UI shows an updated total when the client signals a view.
 		const newCount = await incrementThreadViewCount(pool, threadId, 1);
-
+		
 		let insertId = null;
 		if (should) {
 			insertId = await insertViewEvent(pool, { thread_id: threadId, viewer_id, session_id, ip_hash: ipHash });
 		}
-
+		
 		res.json({ ok: true, recorded: should, inserted_id: insertId, view_count: newCount });
 	} catch (err) {
 		console.error('Error recording view', err);
@@ -571,6 +571,59 @@ router.post('/threads/:id/view', async (req, res) => {
 	}
 });
 
+router.get('/admin/users', async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || Number(req.session.user.role_id) !== 1) {
+			return res.status(403).json({ ok: false, message: 'Forbidden: Admins only' });
+		}
+	const [rows] = await pool.query('SELECT id, username, role_id, image_url FROM user ORDER BY id ASC');
+		res.json({ ok: true, users: rows });
+	} catch (err) {
+		console.error('Error fetching users for admin', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+router.delete('/admin/users/:id', async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || Number(req.session.user.role_id) !== 1) {
+			return res.status(403).json({ ok: false, message: 'Forbidden: Admins only' });
+		}
+		const userId = Number(req.params.id);
+		if (!userId) return res.status(400).json({ ok: false, message: 'Invalid user id' });
+		if (userId === req.session.user.id) return res.status(400).json({ ok: false, message: 'Cannot delete yourself' });
+		const [result] = await pool.query('DELETE FROM user WHERE id = ?', [userId]);
+		if (result.affectedRows > 0) {
+			res.json({ ok: true });
+		} else {
+			res.status(404).json({ ok: false, message: 'User not found' });
+		}
+	} catch (err) {
+		console.error('Error deleting user', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
+
+router.post('/admin/users/:id/role', async (req, res) => {
+	try {
+		if (!req.session || !req.session.user || Number(req.session.user.role_id) !== 1) {
+			return res.status(403).json({ ok: false, message: 'Forbidden: Admins only' });
+		}
+		const userId = Number(req.params.id);
+		const { role_id } = req.body;
+		if (!userId || ![1,2].includes(Number(role_id))) return res.status(400).json({ ok: false, message: 'Invalid user id or role' });
+		if (userId === req.session.user.id && Number(role_id) !== 1) return res.status(400).json({ ok: false, message: 'Cannot demote yourself' });
+		const [result] = await pool.query('UPDATE user SET role_id = ? WHERE id = ?', [role_id, userId]);
+		if (result.affectedRows > 0) {
+			res.json({ ok: true });
+		} else {
+			res.status(404).json({ ok: false, message: 'User not found' });
+		}
+	} catch (err) {
+		console.error('Error updating user role', err);
+		res.status(500).json({ ok: false, message: 'Database error' });
+	}
+});
 
 
 module.exports = router;
