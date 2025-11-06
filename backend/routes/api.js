@@ -472,6 +472,7 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 		//Check for empty fields
 		if (!title || !category_id) {
 			return res.status(400).json({ ok: false, message: 'title and category_id are required.' });
+				const MAX_TITLE_LENGTH = 120;
 		}
 
 		// fetch category
@@ -483,6 +484,10 @@ router.post('/threads', upload.single('image'), async (req, res) => {
 	let uploadResult = null;
 
 		if (req.file) {
+
+				if (typeof title === 'string' && title.trim().length > MAX_TITLE_LENGTH) {
+					return res.status(400).json({ ok: false, message: `Title must be ${MAX_TITLE_LENGTH} characters or fewer.` });
+				}
 			if (!category.photo_allow) {
 				return res.status(400).json({ ok: false, message: 'This category does not allow image posts' });
 			}

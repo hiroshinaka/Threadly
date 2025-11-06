@@ -13,7 +13,7 @@ export default function Comment({ comment, authorName, authorAvatar }) {
       <div className="mb-2 text-sm text-slate-500 flex items-center gap-2">
         <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-semibold">t/{comment.category_name || comment.category_slug || 'unknown'}</span>
         <span>•</span>
-        <span className="truncate">{comment.thread_title || 'Untitled'}</span>
+      <span className="line-clamp-1 min-w-0 truncate" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{comment.thread_title || 'Untitled'}</span>
       </div>
 
       <div className="flex items-start gap-3">
@@ -25,8 +25,8 @@ export default function Comment({ comment, authorName, authorAvatar }) {
           </div>
 
           {/* truncate long comments for profile list views */}
-          <p className="mt-1 text-slate-700">
-            {typeof comment.text === 'string' && comment.text.length > 250 ? comment.text.slice(0, 247) + '\u2026' : comment.text}
+          <p className="mt-1 text-slate-700 line-clamp-2 break-words" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+            {typeof comment.text === 'string' ? comment.text : String(comment.text)}
           </p>
 
           <div className="mt-3 flex items-center gap-3 text-sm text-slate-500">

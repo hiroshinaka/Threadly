@@ -30,8 +30,13 @@ export default function ThreadModal({ isOpen, onClose, categories = [], selected
     e.preventDefault();
     setError(null);
     setError(null);
+    const MAX_TITLE = 120;
     if (!title || title.trim().length < 2) {
       setError('Please provide a title with at least 2 characters.');
+      return;
+    }
+    if (title.trim().length > MAX_TITLE) {
+      setError(`Title must be ${MAX_TITLE} characters or fewer.`);
       return;
     }
 
@@ -107,12 +112,14 @@ export default function ThreadModal({ isOpen, onClose, categories = [], selected
 
           <label className="block mt-4">
             <span className="text-sm font-medium">Title</span>
-            <input
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 block w-full rounded-md border px-3 py-2"
-            />
+              <input
+                required
+                maxLength={120}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mt-1 block w-full rounded-md border px-3 py-2"
+              />
+              <div className="text-xs text-slate-500 mt-1">{title.trim().length}/120</div>
           </label>
 
           <label className="block mt-4">
