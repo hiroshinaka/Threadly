@@ -11,6 +11,7 @@ import Footer from './components/Footer';
 import ThreadView from './components/ThreadView';
 import SearchResults from './components/SearchResults';
 import CategoryPage from './components/CategoryPage';
+import AdminPage from './components/AdminPage';
 import { OrbitProgress } from 'react-loading-indicators';
 // We'll fetch categories and threads from the backend instead of using mock data
 
@@ -192,8 +193,9 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/profile" element={<Profile />} />
-  <Route path="/t/:slug/:id" element={<ThreadView />} />
-  <Route path="/t/:categorySlug" element={<CategoryPage threadsData={threadsData} categories={categories} />} />
+  <Route path="/admin" element={<AdminPage />} />
+        <Route path="/t/:slug/:id" element={<ThreadView />} />
+        <Route path="/t/:categorySlug" element={<CategoryPage threadsData={threadsData} categories={categories} />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/" element={
           <main className="bg-gray-50">

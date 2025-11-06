@@ -183,11 +183,24 @@ export default function Header({
                             setShowProfileMenu(false);
                             navigate('/profile');
                           }}
-                          className="block text-left w-full rounded-lg px-4 py-2 text-base text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                          className="block text-left w-full rounded-lg px-4 py-2 text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                           role="menuitem"
                         >
                           Profile
                         </button>
+                        {user?.role_id === 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowProfileMenu(false);
+                              navigate('/admin');
+                            }}
+                            className="block text-left w-full rounded-lg px-4 py-2 text-base font-medium text-blue-700 hover:bg-blue-100 hover:text-blue-900"
+                            role="menuitem"
+                          >
+                            Admin
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={async () => {
@@ -198,7 +211,7 @@ export default function Header({
                               navigate('/');
                             }
                           }}
-                          className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-base text-red-700 hover:bg-red-50"
+                          className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-base font-medium text-red-700 hover:bg-red-100"
                           role="menuitem"
                         >
                           <svg
