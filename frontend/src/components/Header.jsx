@@ -39,8 +39,21 @@ export default function Header({
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Create category failed: ${res.status} ${text}`);
+        // prefer structured JSON { message } when available, otherwise use plain text
+        let errMsg = `Create category failed: ${res.status}`;
+        try {
+          const txt = await res.text();
+          try {
+            const parsed = JSON.parse(txt);
+            if (parsed && parsed.message) errMsg = parsed.message;
+            else errMsg = txt;
+          } catch (e) {
+            errMsg = txt || errMsg;
+          }
+        } catch (e) {
+          // fallback to status-only message
+        }
+        throw new Error(errMsg);
       }
       const body = await res.json();
       // if backend returns created category, push it into localCategories
